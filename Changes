@@ -1,570 +1,1640 @@
-// Export to PDF - FIXED VERSION with proper spacing
-exportToPDF(observations) {
-    if (this.isGeneratingPDF) {
-        this.showStatus('PDF generation already in progress', 'warning', 'export');
-        return;
-    }
+<script>
+    // Habitat types for dropdown
+    const HABITAT_TYPES = [
+        'forest', 'wetland', 'grassland', 'coastal', 'urban',
+        'agricultural', 'alpine', 'riverine', 'desert', 'other'
+    ];
 
-    this.isGeneratingPDF = true;
-    const exportBtn = document.getElementById('generate-export');
-    const originalText = exportBtn.textContent;
-    exportBtn.innerHTML = '<span class="loading"></span> Generating PDF...';
-    exportBtn.disabled = true;
+    // Observation types
+    const OBSERVATION_TYPES = [
+        'direct', 'scat', 'track', 'call', 'nest',
+        'roadkill', 'feather', 'bone', 'other'
+    ];
 
-    // Show progress UI
-    const progressUI = document.getElementById('pdf-progress');
-    const progressBar = document.getElementById('pdf-progress-bar');
-    const statusText = document.getElementById('pdf-status-text');
-    const currentAction = document.getElementById('pdf-current-action');
-    
-    progressUI.style.display = 'block';
-    progressBar.value = 0;
-    statusText.textContent = 'Preparing PDF document...';
-    currentAction.textContent = '';
+    // Equipment options
+    const EQUIPMENT_OPTIONS = [
+        'binoculars', 'camera', 'hand-lens', 'gps', 'microscope',
+        'hair-tube', 'pitfall-trap', 'camera-trap', 'other-equipment'
+    ];
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-    });
+    // Main application state
+    const EcoLens = {
+        observations: [],
+        currentPhoto: null,
+        map: null,
+        mapMarker: null,
+        mapEnabled: false,
+        isLocating: false,
+        isGeneratingPDF: false,
 
-    const margin = 15;
-    const pageWidth = doc.internal.pageSize.width;
-    const pageHeight = doc.internal.pageSize.height;
-    const contentWidth = pageWidth - (margin * 2);
-    let y = margin;
-    let currentPage = 1;
-    const totalObservations = observations.length;
-    let processedObservations = 0;
+        // Initialize the application
+        init() {
+            this.loadObservations();
+            this.setupEventListeners();
+            this.renderLogbook();
+            this.updateDateInputs();
+            this.setCurrentDateTime();
+            console.log('EcoLens initialized with', this.observations.length, 'observations');
+        },
 
-    // Helper function to check if we need a new page
-    const checkPageSpace = (requiredSpace) => {
-        if (y + requiredSpace > pageHeight - margin) {
-            addNewPage();
-            return true;
-        }
-        return false;
-    };
+        // Set current date/time in form
+        setCurrentDateTime() {
+            const now = new Date();
+            const dateStr = now.toISOString().split('T')[0];
+            const timeStr = now.toTimeString().slice(0, 5);
+            
+            document.getElementById('observation-date').value = dateStr;
+            document.getElementById('observation-time').value = timeStr;
+        },
 
-    // Helper function to add new page
-    const addNewPage = () => {
-        doc.addPage();
-        currentPage++;
-        y = margin;
-        
-        // Add page header
-        doc.setFontSize(10);
-        doc.setTextColor(100);
-        doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
-        y += 5;
-        
-        // Add page separator
-        doc.setDrawColor(200);
-        doc.line(margin, y, pageWidth - margin, y);
-        y += 10;
-    };
+        // Generate a unique observation ID
+        generateObservationId() {
+            const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            const random = Math.random().toString(36).substring(2, 7);
+            return `ECO-${date}-${random}`.toUpperCase();
+        },
 
-    // Helper function to add text with word wrap and return new y position
-    const addWrappedText = (text, x, startY, maxWidth, lineHeight = 6) => {
-        if (!text || text.trim() === '') return startY;
-        
-        const lines = doc.splitTextToSize(text, maxWidth);
-        
-        // Check if we have enough space
-        if (checkPageSpace(lines.length * lineHeight)) {
-            startY = y;
-        }
-        
-        lines.forEach((line, index) => {
-            // Check for each line if we need new page
-            if (startY + (index * lineHeight) > pageHeight - margin) {
-                addNewPage();
-                startY = y;
+        // Create a new observation object with all fields
+        createObservation(data) {
+            const dateTime = new Date(data.date + 'T' + data.time);
+            return {
+                id: this.generateObservationId(),
+                timestamp: dateTime.toISOString(),
+                scientificName: data.scientificName.trim(),
+                commonName: data.commonName?.trim() || '',
+                location: {
+                    text: data.location.trim(),
+                    coordinates: data.coordinates || null,
+                    accuracy: data.accuracy || null
+                },
+                habitat: data.habitat,
+                observationType: data.observationType,
+                characteristics: data.characteristics?.trim() || '',
+                notes: data.notes?.trim() || '',
+                equipment: data.equipment || [],
+                references: data.references?.trim() || '',
+                photo: data.photo,
+                metadata: {
+                    deviceInfo: navigator.userAgent,
+                    appVersion: '1.0',
+                    lastModified: new Date().toISOString()
+                }
+            };
+        },
+
+        // Save observation to localStorage
+        saveObservation(observation) {
+            this.observations.unshift(observation); // Add to beginning for newest first
+            localStorage.setItem('ecolens_observations', JSON.stringify(this.observations));
+            this.renderLogbook();
+        },
+
+        // Load observations from localStorage
+        loadObservations() {
+            try {
+                const saved = localStorage.getItem('ecolens_observations');
+                this.observations = saved ? JSON.parse(saved) : [];
+            } catch (error) {
+                console.error('Error loading observations:', error);
+                this.observations = [];
             }
-            doc.text(line, x, startY + (index * lineHeight));
-        });
-        
-        return startY + (lines.length * lineHeight);
-    };
+        },
 
-    // Helper function to add section header with proper spacing
-    const addSectionHeader = (text, sectionSpacing = true) => {
-        // Add spacing before section if requested
-        if (sectionSpacing) {
-            y += 5;
-        }
-        
-        // Check if we have space for header (header + 5mm margin)
-        checkPageSpace(15);
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(40, 40, 40);
-        doc.text(text, margin, y);
-        y += 8;
-        
-        // Add underline
-        doc.setDrawColor(100, 150, 100);
-        doc.line(margin, y, margin + 50, y);
-        y += 10;
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(60);
-        
-        return y;
-    };
+        // Update an existing observation
+        updateObservation(id, data) {
+            const index = this.observations.findIndex(obs => obs.id === id);
+            if (index !== -1) {
+                this.observations[index] = {
+                    ...this.observations[index],
+                    ...data,
+                    metadata: {
+                        ...this.observations[index].metadata,
+                        lastModified: new Date().toISOString()
+                    }
+                };
+                localStorage.setItem('ecolens_observations', JSON.stringify(this.observations));
+                this.renderLogbook();
+                return true;
+            }
+            return false;
+        },
 
-    // Helper function to add key-value pair with proper spacing
-    const addKeyValue = (key, value, indent = 0, maxValueWidth = null) => {
-        if (!value || value === '' || value === 'Not specified') return y;
-        
-        const x = margin + indent;
-        const keyText = `${key}: `;
-        
-        // Check if we have space for at least one line
-        checkPageSpace(10);
-        
-        doc.setFont('helvetica', 'bold');
-        const keyWidth = doc.getTextWidth(keyText);
-        doc.text(keyText, x, y);
-        
-        doc.setFont('helvetica', 'normal');
-        const valueX = x + keyWidth;
-        const valueWidth = maxValueWidth || (contentWidth - indent - keyWidth);
-        
-        y = addWrappedText(value, valueX, y, valueWidth, 5);
-        y += 4;
-        return y;
-    };
+        // Delete an observation
+        deleteObservation(id) {
+            if (confirm('Are you sure you want to delete this observation?')) {
+                this.observations = this.observations.filter(obs => obs.id !== id);
+                localStorage.setItem('ecolens_observations', JSON.stringify(this.observations));
+                this.renderLogbook();
+                this.showStatus('Observation deleted successfully', 'success');
+            }
+        },
 
-    // Update progress
-    const updateProgress = (step, action) => {
-        const progress = Math.round((processedObservations / totalObservations) * 100);
-        progressBar.value = progress;
-        currentAction.textContent = action;
-        
-        if (step === 'observation') {
-            processedObservations++;
-            statusText.textContent = `Processing observation ${processedObservations} of ${totalObservations}`;
-        }
-    };
+        // Get filtered observations for export
+        getFilteredObservations(startDate = null, endDate = null) {
+            if (!startDate && !endDate) {
+                return this.observations;
+            }
 
-    // Generate PDF asynchronously to show progress
-    setTimeout(async () => {
-        try {
-            // Cover page
-            updateProgress('cover', 'Creating cover page...');
+            return this.observations.filter(obs => {
+                const obsDate = new Date(obs.timestamp);
+                if (startDate && obsDate < new Date(startDate)) return false;
+                if (endDate && obsDate > new Date(endDate + 'T23:59:59')) return false;
+                return true;
+            });
+        },
+
+        // Setup all event listeners
+        setupEventListeners() {
+            // Tab navigation
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    this.switchTab(tab);
+                });
+            });
+
+            // Set current date/time button
+            document.getElementById('set-now').addEventListener('click', () => {
+                this.setCurrentDateTime();
+            });
+
+            // Record observation
+            document.getElementById('record-btn').addEventListener('click', () => {
+                this.handleRecordObservation();
+            });
+
+            // Map toggle
+            document.getElementById('toggle-map').addEventListener('click', () => {
+                this.toggleMap();
+            });
+
+            // Use my location
+            document.getElementById('use-my-location').addEventListener('click', () => {
+                this.getUserLocation();
+            });
+
+            // Photo handling
+            document.getElementById('capture-photo').addEventListener('click', () => {
+                document.getElementById('photo-upload').click();
+            });
+
+            document.getElementById('photo-upload').addEventListener('change', (e) => {
+                this.handlePhotoUpload(e);
+            });
+
+            // Equipment other input toggle
+            document.querySelectorAll('input[name="equipment"]').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.value === 'other-equipment') {
+                        document.getElementById('other-equipment').style.display = 
+                            e.target.checked ? 'block' : 'none';
+                    }
+                });
+            });
+
+            // Export generation
+            document.getElementById('generate-export').addEventListener('click', () => {
+                this.handleExport();
+            });
+
+            // Form inputs - clear status on change
+            document.querySelectorAll('#record-panel input, #record-panel textarea, #record-panel select')
+                .forEach(input => {
+                    input.addEventListener('input', () => {
+                        document.getElementById('record-status').style.display = 'none';
+                    });
+                });
+        },
+
+        // Switch between tabs
+        switchTab(tabName) {
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabName);
+            });
+
+            // Show selected panel
+            document.querySelectorAll('.tab-panel').forEach(panel => {
+                panel.classList.toggle('active', panel.id === `${tabName}-panel`);
+            });
+
+            // Hide export download section when switching away
+            if (tabName !== 'export') {
+                document.getElementById('export-download').style.display = 'none';
+                document.getElementById('pdf-progress').style.display = 'none';
+            }
+        },
+
+        // Handle recording a new observation
+        handleRecordObservation() {
+            // Get all form values
+            const date = document.getElementById('observation-date').value;
+            const time = document.getElementById('observation-time').value;
+            const scientificName = document.getElementById('scientific-name').value.trim();
+            const commonName = document.getElementById('common-name').value.trim();
+            const location = document.getElementById('location').value.trim();
+            const habitat = document.getElementById('habitat').value;
+            const observationType = document.getElementById('observation-type').value;
+            const characteristics = document.getElementById('characteristics').value.trim();
+            const notes = document.getElementById('notes').value.trim();
+            const references = document.getElementById('references').value.trim();
+
+            // Get equipment used
+            const equipment = [];
+            document.querySelectorAll('input[name="equipment"]:checked').forEach(cb => {
+                equipment.push(cb.value);
+            });
             
-            doc.setFontSize(24);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(40, 100, 60);
-            doc.text('ECOLENS FIELD LOG', pageWidth / 2, 60, { align: 'center' });
+            // Add other equipment if specified
+            const otherEquipment = document.getElementById('other-equipment').value.trim();
+            if (otherEquipment && equipment.includes('other-equipment')) {
+                equipment[equipment.indexOf('other-equipment')] = `other: ${otherEquipment}`;
+            }
+
+            // Validation
+            if (!date || !time) {
+                this.showStatus('Please enter observation date and time', 'error');
+                return;
+            }
+
+            if (!scientificName) {
+                this.showStatus('Please enter scientific name', 'error');
+                document.getElementById('scientific-name').focus();
+                return;
+            }
+
+            if (!location && !this.mapMarker) {
+                this.showStatus('Please enter a location or use the map', 'error');
+                return;
+            }
+
+            if (!habitat) {
+                this.showStatus('Please select habitat type', 'error');
+                return;
+            }
+
+            if (!observationType) {
+                this.showStatus('Please select observation type', 'error');
+                return;
+            }
+
+            // Get coordinates if map is enabled
+            let coordinates = null;
+            let accuracy = null;
+            if (this.mapMarker) {
+                const latlng = this.mapMarker.getLatLng();
+                coordinates = { lat: latlng.lat, lng: latlng.lng };
+                accuracy = this.mapMarker.options.accuracy || null;
+            }
+
+            // Create observation
+            const observation = this.createObservation({
+                date,
+                time,
+                scientificName,
+                commonName,
+                location: location || 'Map location selected',
+                coordinates,
+                accuracy,
+                habitat,
+                observationType,
+                characteristics,
+                notes,
+                equipment,
+                references,
+                photo: this.currentPhoto
+            });
+
+            // Save and reset form
+            this.saveObservation(observation);
+            this.resetForm();
+            this.showStatus(`Observation ${observation.id} recorded successfully!`, 'success');
             
-            doc.setFontSize(16);
-            doc.setTextColor(80);
-            doc.text('Field Observation Report', pageWidth / 2, 75, { align: 'center' });
+            // Switch to logbook tab
+            setTimeout(() => this.switchTab('logbook'), 1500);
+        },
+
+        // Reset the form
+        resetForm() {
+            // Reset all form fields
+            this.setCurrentDateTime();
+            document.getElementById('scientific-name').value = '';
+            document.getElementById('common-name').value = '';
+            document.getElementById('location').value = '';
+            document.getElementById('habitat').value = '';
+            document.getElementById('observation-type').value = '';
+            document.getElementById('characteristics').value = '';
+            document.getElementById('notes').value = '';
+            document.getElementById('references').value = '';
             
-            // Report details
-            doc.setFontSize(12);
-            doc.setFont('helvetica', 'normal');
-            y = 100;
+            // Reset equipment checkboxes
+            document.querySelectorAll('input[name="equipment"]').forEach(cb => {
+                cb.checked = false;
+            });
+            document.getElementById('other-equipment').style.display = 'none';
+            document.getElementById('other-equipment').value = '';
             
+            // Reset photo
+            document.getElementById('photo-preview').style.display = 'none';
+            document.getElementById('photo-preview').src = '';
+            document.getElementById('photo-upload').value = '';
+            document.getElementById('photo-info').style.display = 'none';
+            this.currentPhoto = null;
+            
+            // Reset map
+            if (this.mapMarker) {
+                this.map.removeLayer(this.mapMarker);
+                this.mapMarker = null;
+            }
+            
+            // Hide map if shown
+            if (this.mapEnabled) {
+                this.toggleMap(false);
+            }
+            
+            // Reset location status
+            document.getElementById('location-status').style.display = 'none';
+            
+            // Reset record button if editing
+            const recordBtn = document.getElementById('record-btn');
+            if (recordBtn.dataset.editingId) {
+                recordBtn.textContent = '📝 Record Observation';
+                recordBtn.onclick = () => this.handleRecordObservation();
+                delete recordBtn.dataset.editingId;
+            }
+        },
+
+        // Toggle map visibility
+        toggleMap(show = null) {
+            const mapContainer = document.getElementById('map-container');
+            const toggleBtn = document.getElementById('toggle-map');
+            const toggleText = document.getElementById('map-toggle-text');
+            
+            this.mapEnabled = show !== null ? show : !this.mapEnabled;
+            
+            if (this.mapEnabled) {
+                // Show map
+                mapContainer.style.display = 'block';
+                toggleText.textContent = '🗺️ Hide Map';
+                
+                // Initialize map if not already done
+                if (!this.map) {
+                    this.initMap();
+                } else {
+                    // Update map size if it was hidden
+                    setTimeout(() => {
+                        this.map.invalidateSize();
+                    }, 100);
+                }
+            } else {
+                // Hide map
+                mapContainer.style.display = 'none';
+                toggleText.textContent = '🗺️ Show Map';
+            }
+        },
+
+        // Initialize Leaflet map
+        initMap() {
+            // Default to Canberra if no location yet
+            const defaultCenter = [-35.2809, 149.1300];
+            this.map = L.map('map').setView(defaultCenter, 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(this.map);
+
+            // Add click handler for map
+            this.map.on('click', (e) => {
+                this.addMarker(e.latlng);
+            });
+        },
+
+        // Add marker to map
+        addMarker(latlng, accuracy = null) {
+            if (this.mapMarker) {
+                this.map.removeLayer(this.mapMarker);
+            }
+            
+            // Create marker with optional accuracy circle
+            this.mapMarker = L.marker(latlng).addTo(this.map);
+            
+            if (accuracy) {
+                this.mapMarker.options.accuracy = accuracy;
+                L.circle(latlng, {
+                    radius: accuracy,
+                    color: '#3498db',
+                    fillColor: '#3498db',
+                    fillOpacity: 0.1
+                }).addTo(this.map);
+            }
+            
+            // Update location field
+            const lat = latlng.lat.toFixed(5);
+            const lng = latlng.lng.toFixed(5);
+            document.getElementById('location').value = `Lat: ${lat}, Lng: ${lng}`;
+            
+            // Center map on marker
+            this.map.setView(latlng, Math.max(this.map.getZoom(), 15));
+        },
+
+        // Get user's current location
+        getUserLocation() {
+            if (!navigator.geolocation) {
+                this.showLocationStatus('Geolocation is not supported by your browser', 'error');
+                return;
+            }
+
+            this.isLocating = true;
+            const locateBtn = document.getElementById('use-my-location');
+            const originalText = locateBtn.textContent;
+            locateBtn.innerHTML = '<span class="loading"></span> Locating...';
+            locateBtn.disabled = true;
+
+            this.showLocationStatus('Getting your location...', 'info');
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    // Show map if not already shown
+                    if (!this.mapEnabled) {
+                        this.toggleMap(true);
+                    }
+                    
+                    // Add marker at user's location
+                    this.addMarker([lat, lng], accuracy);
+                    
+                    this.showLocationStatus(`Location acquired (accuracy: ±${Math.round(accuracy)}m)`, 'success');
+                    this.isLocating = false;
+                    locateBtn.textContent = originalText;
+                    locateBtn.disabled = false;
+                },
+                (error) => {
+                    let message = 'Unable to get your location';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            message = 'Location permission denied. Please enable location services.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            message = 'Location information unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            message = 'Location request timed out.';
+                            break;
+                    }
+                    
+                    this.showLocationStatus(message, 'error');
+                    this.isLocating = false;
+                    locateBtn.textContent = originalText;
+                    locateBtn.disabled = false;
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        },
+
+        // Handle photo upload with compression
+        handlePhotoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                this.showStatus('Please select an image file', 'error');
+                return;
+            }
+
+            // Check file size (max 5MB before compression)
+            if (file.size > 5 * 1024 * 1024) {
+                this.showStatus('Image must be less than 5MB', 'error');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.compressImage(e.target.result, (compressedData) => {
+                    this.currentPhoto = {
+                        data: compressedData,
+                        filename: `ECO_${Date.now()}.jpg`,
+                        type: 'image/jpeg',
+                        originalSize: file.size,
+                        compressedSize: Math.round(compressedData.length * 3/4) // Approximate base64 size
+                    };
+                    
+                    const preview = document.getElementById('photo-preview');
+                    preview.src = compressedData;
+                    preview.style.display = 'block';
+                    
+                    // Show photo info
+                    const photoInfo = document.getElementById('photo-info');
+                    const photoSize = document.getElementById('photo-size');
+                    const photoResolution = document.getElementById('photo-resolution');
+                    
+                    // Get image dimensions
+                    const img = new Image();
+                    img.onload = () => {
+                        photoSize.textContent = `Size: ${this.formatBytes(this.currentPhoto.compressedSize)}`;
+                        photoResolution.textContent = `Resolution: ${img.width}×${img.height}`;
+                        photoInfo.style.display = 'block';
+                    };
+                    img.src = compressedData;
+                });
+            };
+            reader.readAsDataURL(file);
+        },
+
+        // Compress image function
+        compressImage(dataUrl, callback, maxWidth = 1920, maxHeight = 1080, quality = 0.7) {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Calculate new dimensions while maintaining aspect ratio
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to JPEG with specified quality
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                callback(compressedDataUrl);
+            };
+            img.src = dataUrl;
+        },
+
+        // Format bytes to human readable size
+        formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        },
+
+        // Render logbook entries
+        renderLogbook() {
+            const container = document.getElementById('logbook-entries');
+            const emptyMessage = document.getElementById('empty-logbook');
+            
+            if (this.observations.length === 0) {
+                container.innerHTML = '';
+                emptyMessage.style.display = 'block';
+                return;
+            }
+            
+            emptyMessage.style.display = 'none';
+            
+            const entriesHtml = this.observations.map(obs => `
+                <div class="log-entry" data-id="${obs.id}">
+                    <div class="log-header">
+                        <div class="log-id">${obs.id}</div>
+                        <div class="log-date">${new Date(obs.timestamp).toLocaleString()}</div>
+                    </div>
+                    <div class="log-species">
+                        ${this.escapeHtml(obs.scientificName)}
+                        ${obs.commonName ? `(${this.escapeHtml(obs.commonName)})` : ''}
+                    </div>
+                    <div class="log-location">${this.escapeHtml(obs.location.text)}</div>
+                    <div class="log-details" id="details-${obs.id}">
+                        <div style="margin: 0.5rem 0;">
+                            <strong>Observation Type:</strong> ${this.formatObservationType(obs.observationType)}
+                        </div>
+                        <div style="margin: 0.5rem 0;">
+                            <strong>Habitat:</strong> ${this.capitalizeFirst(obs.habitat)}
+                        </div>
+                        ${obs.characteristics ? `
+                            <div style="margin: 0.5rem 0;">
+                                <strong>Characteristics:</strong> ${this.escapeHtml(obs.characteristics)}
+                            </div>
+                        ` : ''}
+                        ${obs.equipment && obs.equipment.length > 0 ? `
+                            <div style="margin: 0.5rem 0;">
+                                <strong>Equipment:</strong> ${obs.equipment.map(eq => this.formatEquipment(eq)).join(', ')}
+                            </div>
+                        ` : ''}
+                        ${obs.notes ? `
+                            <div style="margin: 0.5rem 0;">
+                                <strong>Notes:</strong> ${this.escapeHtml(obs.notes)}
+                            </div>
+                        ` : ''}
+                        ${obs.references ? `
+                            <div style="margin: 0.5rem 0;">
+                                <strong>References:</strong> ${this.escapeHtml(obs.references)}
+                            </div>
+                        ` : ''}
+                        ${obs.photo ? `
+                            <div style="margin: 0.5rem 0;">
+                                <strong>Photo:</strong> Included
+                            </div>
+                        ` : ''}
+                        <div class="log-actions">
+                            <button class="btn btn-outline btn-small edit-btn" data-id="${obs.id}">Edit</button>
+                            <button class="btn btn-danger btn-small delete-btn" data-id="${obs.id}">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = entriesHtml;
+            
+            // Add event listeners
+            this.attachLogbookEventListeners();
+        },
+
+        // Attach event listeners to logbook entries
+        attachLogbookEventListeners() {
+            // Toggle details on entry click
+            document.querySelectorAll('.log-entry').forEach(entry => {
+                entry.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('edit-btn') && 
+                        !e.target.classList.contains('delete-btn') &&
+                        !e.target.closest('.log-actions')) {
+                        const id = entry.dataset.id;
+                        const details = document.getElementById(`details-${id}`);
+                        details.classList.toggle('show');
+                    }
+                });
+            });
+            
+            // Edit buttons
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.editObservation(btn.dataset.id);
+                });
+            });
+            
+            // Delete buttons
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteObservation(btn.dataset.id);
+                });
+            });
+        },
+
+        // Edit an observation
+        editObservation(id) {
+            const observation = this.observations.find(obs => obs.id === id);
+            if (!observation) return;
+
+            // Parse date and time
+            const dateTime = new Date(observation.timestamp);
+            const dateStr = dateTime.toISOString().split('T')[0];
+            const timeStr = dateTime.toTimeString().slice(0, 5);
+
+            // Populate form
+            document.getElementById('observation-date').value = dateStr;
+            document.getElementById('observation-time').value = timeStr;
+            document.getElementById('scientific-name').value = observation.scientificName;
+            document.getElementById('common-name').value = observation.commonName;
+            document.getElementById('location').value = observation.location.text;
+            document.getElementById('habitat').value = observation.habitat;
+            document.getElementById('observation-type').value = observation.observationType;
+            document.getElementById('characteristics').value = observation.characteristics;
+            document.getElementById('notes').value = observation.notes;
+            document.getElementById('references').value = observation.references;
+
+            // Equipment checkboxes
+            document.querySelectorAll('input[name="equipment"]').forEach(cb => {
+                cb.checked = false;
+                if (observation.equipment) {
+                    const eqValue = cb.value;
+                    observation.equipment.forEach(eq => {
+                        if (eq.startsWith('other:') && eqValue === 'other-equipment') {
+                            cb.checked = true;
+                            document.getElementById('other-equipment').value = eq.substring(6);
+                            document.getElementById('other-equipment').style.display = 'block';
+                        } else if (eq === eqValue) {
+                            cb.checked = true;
+                        }
+                    });
+                }
+            });
+
+            // Photo
+            if (observation.photo) {
+                this.currentPhoto = observation.photo;
+                const preview = document.getElementById('photo-preview');
+                preview.src = observation.photo.data;
+                preview.style.display = 'block';
+                
+                // Show photo info
+                const photoInfo = document.getElementById('photo-info');
+                const photoSize = document.getElementById('photo-size');
+                photoSize.textContent = `Size: ${this.formatBytes(observation.photo.compressedSize || observation.photo.data.length * 3/4)}`;
+                photoInfo.style.display = 'block';
+            }
+
+            // Change record button to update
+            const recordBtn = document.getElementById('record-btn');
+            recordBtn.textContent = '💾 Update Observation';
+            recordBtn.dataset.editingId = id;
+            recordBtn.onclick = () => this.handleUpdateObservation(id);
+            
+            // Switch to record tab
+            this.switchTab('record');
+            document.getElementById('scientific-name').focus();
+        },
+
+        // Handle updating an observation
+        handleUpdateObservation(id) {
+            // Get all form values (same as recording)
+            const date = document.getElementById('observation-date').value;
+            const time = document.getElementById('observation-time').value;
+            const scientificName = document.getElementById('scientific-name').value.trim();
+            const commonName = document.getElementById('common-name').value.trim();
+            const location = document.getElementById('location').value.trim();
+            const habitat = document.getElementById('habitat').value;
+            const observationType = document.getElementById('observation-type').value;
+            const characteristics = document.getElementById('characteristics').value.trim();
+            const notes = document.getElementById('notes').value.trim();
+            const references = document.getElementById('references').value.trim();
+
+            // Get equipment used
+            const equipment = [];
+            document.querySelectorAll('input[name="equipment"]:checked').forEach(cb => {
+                equipment.push(cb.value);
+            });
+            
+            // Add other equipment if specified
+            const otherEquipment = document.getElementById('other-equipment').value.trim();
+            if (otherEquipment && equipment.includes('other-equipment')) {
+                equipment[equipment.indexOf('other-equipment')] = `other: ${otherEquipment}`;
+            }
+
+            // Validation
+            if (!date || !time || !scientificName || !location || !habitat || !observationType) {
+                this.showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+
+            const updatedData = {
+                timestamp: new Date(date + 'T' + time).toISOString(),
+                scientificName,
+                commonName,
+                location: {
+                    text: location,
+                    coordinates: this.observations.find(obs => obs.id === id)?.location.coordinates || null,
+                    accuracy: this.observations.find(obs => obs.id === id)?.location.accuracy || null
+                },
+                habitat,
+                observationType,
+                characteristics,
+                notes,
+                equipment,
+                references,
+                photo: this.currentPhoto
+            };
+
+            if (this.updateObservation(id, updatedData)) {
+                this.showStatus('Observation updated successfully!', 'success');
+                
+                // Reset form and button
+                this.resetForm();
+            }
+        },
+
+        // Handle export generation
+        handleExport() {
+            const format = document.querySelector('input[name="export-format"]:checked').value;
             const dateFrom = document.getElementById('date-from').value;
             const dateTo = document.getElementById('date-to').value;
-            let dateRangeText = 'All observations';
-            if (dateFrom || dateTo) {
-                dateRangeText = `From: ${dateFrom || 'Start'} to ${dateTo || 'End'}`;
+            
+            const filteredObservations = this.getFilteredObservations(dateFrom, dateTo);
+            
+            if (filteredObservations.length === 0) {
+                this.showStatus('No observations found for the selected criteria', 'error', 'export');
+                return;
             }
             
-            doc.text(`Report Period: ${dateRangeText}`, pageWidth / 2, y, { align: 'center' });
-            y += 10;
-            doc.text(`Total Observations: ${totalObservations}`, pageWidth / 2, y, { align: 'center' });
-            y += 10;
-            doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: 'center' });
-            y += 20;
+            if (format === 'csv') {
+                this.exportToCSV(filteredObservations);
+            } else {
+                this.exportToPDF(filteredObservations);
+            }
+        },
+
+        // Export to CSV with all fields
+        exportToCSV(observations) {
+            const headers = [
+                'ID', 'Timestamp', 'Scientific Name', 'Common Name', 'Location',
+                'Latitude', 'Longitude', 'Habitat', 'Observation Type',
+                'Characteristics', 'Equipment', 'References', 'Notes', 'Has Photo'
+            ];
             
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.text('This report contains detailed field observations including photos,', pageWidth / 2, y, { align: 'center' });
-            y += 5;
-            doc.text('location data, and comprehensive metadata for each record.', pageWidth / 2, y, { align: 'center' });
+            const rows = observations.map(obs => [
+                obs.id,
+                new Date(obs.timestamp).toLocaleString(),
+                `"${obs.scientificName.replace(/"/g, '""')}"`,
+                `"${obs.commonName.replace(/"/g, '""')}"`,
+                `"${obs.location.text.replace(/"/g, '""')}"`,
+                obs.location.coordinates?.lat || '',
+                obs.location.coordinates?.lng || '',
+                obs.habitat,
+                obs.observationType,
+                `"${(obs.characteristics || '').replace(/"/g, '""')}"`,
+                `"${(obs.equipment || []).join('; ').replace(/"/g, '""')}"`,
+                `"${(obs.references || '').replace(/"/g, '""')}"`,
+                `"${(obs.notes || '').replace(/"/g, '""')}"`,
+                obs.photo ? 'Yes' : 'No'
+            ]);
             
-            // Table of contents
-            addNewPage();
-            updateProgress('toc', 'Creating table of contents...');
-            addSectionHeader('Table of Contents', false);
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.join(','))
+            ].join('\n');
             
-            y += 10;
-            observations.forEach((obs, index) => {
-                // Check space for each TOC entry
-                checkPageSpace(7);
-                const entry = `${index + 1}. ${obs.scientificName} (${obs.id})`;
-                doc.text(entry, margin, y);
-                y += 7;
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            
+            this.showExportDownload(url, `EcoLens_Export_${new Date().toISOString().slice(0,10)}.csv`);
+            this.showStatus(`Exported ${observations.length} observations to CSV`, 'success', 'export');
+        },
+
+        // Export to PDF - FIXED VERSION with proper spacing
+        exportToPDF(observations) {
+            if (this.isGeneratingPDF) {
+                this.showStatus('PDF generation already in progress', 'warning', 'export');
+                return;
+            }
+
+            this.isGeneratingPDF = true;
+            const exportBtn = document.getElementById('generate-export');
+            const originalText = exportBtn.textContent;
+            exportBtn.innerHTML = '<span class="loading"></span> Generating PDF...';
+            exportBtn.disabled = true;
+
+            // Show progress UI
+            const progressUI = document.getElementById('pdf-progress');
+            const progressBar = document.getElementById('pdf-progress-bar');
+            const statusText = document.getElementById('pdf-status-text');
+            const currentAction = document.getElementById('pdf-current-action');
+            
+            progressUI.style.display = 'block';
+            progressBar.value = 0;
+            statusText.textContent = 'Preparing PDF document...';
+            currentAction.textContent = '';
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({
+                orientation: 'portrait',
+                unit: 'mm',
+                format: 'a4'
             });
-            
-            // Process each observation
-            for (let i = 0; i < observations.length; i++) {
-                const obs = observations[i];
-                
-                // Add new page for each observation (except first after TOC)
-                if (i > 0 || currentPage > 2) {
-                    addNewPage();
-                }
-                
-                updateProgress('observation', `Adding observation: ${obs.scientificName}`);
-                
-                // Observation header
-                checkPageSpace(20); // Space for header
-                doc.setFontSize(14);
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(40, 40, 40);
-                doc.text(`Observation ${i + 1}: ${obs.id}`, margin, y);
-                y += 10;
-                
-                // Observation details in two columns
-                const col1X = margin;
-                const col2X = margin + (contentWidth / 2) + 5;
-                const columnWidth = (contentWidth / 2) - 5;
-                
-                // Start columns at same y position
-                let col1Y = y;
-                let col2Y = y;
-                
-                // COLUMN 1: Basic Information
-                doc.setFontSize(10);
-                doc.setFont('helvetica', 'bold');
-                doc.text('BASIC INFORMATION', col1X, col1Y);
-                col1Y += 7; // Space after heading
-                doc.setFont('helvetica', 'normal');
-                
-                // Add key-value pairs in column 1
-                const col1Items = [
-                    { key: 'Date/Time', value: new Date(obs.timestamp).toLocaleString() },
-                    { key: 'Scientific Name', value: obs.scientificName },
-                    { key: 'Common Name', value: obs.commonName || 'Not specified' },
-                    { key: 'Habitat', value: this.capitalizeFirst(obs.habitat) },
-                    { key: 'Observation Type', value: this.formatObservationType(obs.observationType) }
-                ];
-                
-                col1Items.forEach(item => {
-                    doc.setFont('helvetica', 'bold');
-                    const keyText = `${item.key}: `;
-                    const keyWidth = doc.getTextWidth(keyText);
-                    doc.text(keyText, col1X, col1Y);
+
+            const margin = 15;
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            const contentWidth = pageWidth - (margin * 2);
+            let y = margin;
+            let currentPage = 1;
+            const totalObservations = observations.length;
+            let processedObservations = 0;
+
+            // Helper function to check if we need a new page
+            const checkPageSpace = (requiredSpace) => {
+                if (y + requiredSpace > pageHeight - margin) {
+                    doc.addPage();
+                    currentPage++;
+                    y = margin;
                     
-                    doc.setFont('helvetica', 'normal');
-                    const wrappedLines = doc.splitTextToSize(item.value, columnWidth - keyWidth);
+                    // Add page header
+                    doc.setFontSize(10);
+                    doc.setTextColor(100);
+                    doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
+                    y += 5;
                     
-                    // Handle multi-line values
-                    if (wrappedLines.length === 1) {
-                        doc.text(item.value, col1X + keyWidth, col1Y);
-                        col1Y += 5;
-                    } else {
-                        // First line
-                        doc.text(wrappedLines[0], col1X + keyWidth, col1Y);
-                        col1Y += 5;
-                        
-                        // Subsequent lines (indented)
-                        for (let j = 1; j < wrappedLines.length; j++) {
-                            doc.text(wrappedLines[j], col1X + keyWidth, col1Y);
-                            col1Y += 5;
-                        }
-                    }
-                    col1Y += 1; // Extra space between items
-                });
-                
-                // COLUMN 2: Location & Equipment
-                doc.setFont('helvetica', 'bold');
-                doc.text('LOCATION & EQUIPMENT', col2X, col2Y);
-                col2Y += 7; // Space after heading
-                doc.setFont('helvetica', 'normal');
-                
-                // Add key-value pairs in column 2
-                const col2Items = [];
-                
-                // Location text
-                col2Items.push({ key: 'Location', value: obs.location.text });
-                
-                // Coordinates if available
-                if (obs.location.coordinates) {
-                    const coords = `Lat: ${obs.location.coordinates.lat.toFixed(5)}, Lng: ${obs.location.coordinates.lng.toFixed(5)}`;
-                    col2Items.push({ key: 'Coordinates', value: coords });
-                }
-                
-                // Accuracy if available
-                if (obs.location.accuracy) {
-                    col2Items.push({ key: 'Accuracy', value: `±${Math.round(obs.location.accuracy)} meters` });
-                }
-                
-                // Equipment if available
-                if (obs.equipment && obs.equipment.length > 0) {
-                    const equipmentText = obs.equipment.map(eq => this.formatEquipment(eq)).join(', ');
-                    col2Items.push({ key: 'Equipment Used', value: equipmentText });
-                }
-                
-                // References if available
-                if (obs.references) {
-                    col2Items.push({ key: 'References', value: obs.references });
-                }
-                
-                col2Items.forEach(item => {
-                    doc.setFont('helvetica', 'bold');
-                    const keyText = `${item.key}: `;
-                    const keyWidth = doc.getTextWidth(keyText);
-                    doc.text(keyText, col2X, col2Y);
-                    
-                    doc.setFont('helvetica', 'normal');
-                    const wrappedLines = doc.splitTextToSize(item.value, columnWidth - keyWidth);
-                    
-                    // Handle multi-line values
-                    if (wrappedLines.length === 1) {
-                        doc.text(item.value, col2X + keyWidth, col2Y);
-                        col2Y += 5;
-                    } else {
-                        // First line
-                        doc.text(wrappedLines[0], col2X + keyWidth, col2Y);
-                        col2Y += 5;
-                        
-                        // Subsequent lines (indented)
-                        for (let j = 1; j < wrappedLines.length; j++) {
-                            doc.text(wrappedLines[j], col2X + keyWidth, col2Y);
-                            col2Y += 5;
-                        }
-                    }
-                    col2Y += 1; // Extra space between items
-                });
-                
-                // Set y to the bottom of the tallest column
-                y = Math.max(col1Y, col2Y) + 10;
-                
-                // Characteristics section
-                if (obs.characteristics) {
-                    y = addSectionHeader('DESCRIPTION / CHARACTERISTICS');
-                    y = addWrappedText(obs.characteristics, margin, y, contentWidth, 5);
+                    // Add page separator
+                    doc.setDrawColor(200);
+                    doc.line(margin, y, pageWidth - margin, y);
                     y += 10;
+                    return true;
+                }
+                return false;
+            };
+
+            // Helper function to add text with word wrap and return new y position
+            const addWrappedText = (text, x, startY, maxWidth, lineHeight = 6) => {
+                if (!text || text.trim() === '') return startY;
+                
+                const lines = doc.splitTextToSize(text, maxWidth);
+                
+                // Check if we have enough space
+                if (checkPageSpace(lines.length * lineHeight)) {
+                    startY = y;
                 }
                 
-                // Notes section
-                if (obs.notes) {
-                    y = addSectionHeader('ADDITIONAL NOTES');
-                    y = addWrappedText(obs.notes, margin, y, contentWidth, 5);
-                    y += 10;
-                }
-                
-                // Photo section
-                if (obs.photo && obs.photo.data) {
-                    y = addSectionHeader('PHOTO / EVIDENCE');
-                    
-                    try {
-                        updateProgress('photo', `Adding photo for: ${obs.scientificName}`);
+                lines.forEach((line, index) => {
+                    // Check for each line if we need new page
+                    if (startY + (index * lineHeight) > pageHeight - margin) {
+                        doc.addPage();
+                        currentPage++;
+                        y = margin;
+                        startY = y;
                         
-                        // Check if we have enough space for the photo (80mm minimum)
-                        checkPageSpace(80);
-                        
-                        // Add photo caption
-                        doc.setFontSize(9);
-                        doc.setTextColor(80);
-                        doc.text('Observation Photo:', margin, y);
+                        // Add page header
+                        doc.setFontSize(10);
+                        doc.setTextColor(100);
+                        doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
                         y += 5;
                         
-                        // Add photo with fixed aspect ratio
-                        const maxImgWidth = contentWidth;
-                        const maxImgHeight = 80; // Max height for photos
-                        
-                        // Convert base64 to image object
-                        const img = new Image();
-                        await new Promise((resolve, reject) => {
-                            img.onload = resolve;
-                            img.onerror = reject;
-                            img.src = obs.photo.data;
-                        });
-                        
-                        // Calculate dimensions maintaining aspect ratio
-                        let imgWidth = img.width;
-                        let imgHeight = img.height;
-                        const aspectRatio = imgWidth / imgHeight;
-                        
-                        if (imgWidth > maxImgWidth) {
-                            imgWidth = maxImgWidth;
-                            imgHeight = imgWidth / aspectRatio;
-                        }
-                        
-                        if (imgHeight > maxImgHeight) {
-                            imgHeight = maxImgHeight;
-                            imgWidth = imgHeight * aspectRatio;
-                        }
-                        
-                        // Center the image
-                        const imgX = margin + (contentWidth - imgWidth) / 2;
-                        
-                        // Add image to PDF
-                        doc.addImage(
-                            img,
-                            'JPEG',
-                            imgX,
-                            y,
-                            imgWidth,
-                            imgHeight
-                        );
-                        
-                        y += imgHeight + 10;
-                        
-                        // Add photo metadata
-                        doc.setFontSize(8);
-                        doc.setTextColor(100);
-                        const imgMetadata = `File: ${obs.photo.filename || 'photo.jpg'} | Included in record`;
-                        doc.text(imgMetadata, margin, y);
-                        y += 6;
-                        
-                    } catch (error) {
-                        console.error('Error adding photo to PDF:', error);
-                        doc.setFontSize(9);
-                        doc.setTextColor(150, 0, 0);
-                        doc.text('Photo could not be included in PDF (format issue)', margin, y);
+                        // Add page separator
+                        doc.setDrawColor(200);
+                        doc.line(margin, y, pageWidth - margin, y);
                         y += 10;
+                        startY = y;
                     }
-                }
-                
-                // Metadata footer
-                doc.setFontSize(8);
-                doc.setTextColor(120);
-                doc.setFont('helvetica', 'italic');
-                
-                // Check space for metadata
-                checkPageSpace(20);
-                
-                const metadataLines = [
-                    `Record ID: ${obs.id}`,
-                    `Created: ${new Date(obs.timestamp).toLocaleString()}`,
-                    `Last Modified: ${new Date(obs.metadata.lastModified).toLocaleString()}`,
-                    `Device: ${obs.metadata.deviceInfo.substring(0, 40)}...`
-                ];
-                
-                metadataLines.forEach(line => {
-                    doc.text(line, margin, y);
-                    y += 4;
+                    doc.text(line, x, startY + (index * lineHeight));
                 });
                 
-                y += 10;
+                return startY + (lines.length * lineHeight);
+            };
+
+            // Update progress
+            const updateProgress = (step, action) => {
+                const progress = Math.round((processedObservations / totalObservations) * 100);
+                progressBar.value = progress;
+                currentAction.textContent = action;
                 
-                // Add page separator if not last observation
-                if (i < observations.length - 1) {
-                    checkPageSpace(15);
-                    doc.setDrawColor(200);
-                    doc.setLineWidth(0.5);
-                    doc.line(margin, y, pageWidth - margin, y);
-                    y += 15;
+                if (step === 'observation') {
+                    processedObservations++;
+                    statusText.textContent = `Processing observation ${processedObservations} of ${totalObservations}`;
                 }
-            }
-            
-            // Final page - summary
-            addNewPage();
-            updateProgress('summary', 'Adding summary page...');
-            
-            addSectionHeader('REPORT SUMMARY', false);
-            y += 10;
-            
-            doc.setFontSize(11);
-            doc.setFont('helvetica', 'bold');
-            doc.text('Statistics:', margin, y);
-            y += 10;
-            
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
-            
-            // Count by habitat
-            const habitatCount = {};
-            observations.forEach(obs => {
-                habitatCount[obs.habitat] = (habitatCount[obs.habitat] || 0) + 1;
-            });
-            
-            doc.text('Observations by Habitat Type:', margin, y);
-            y += 7;
-            
-            Object.entries(habitatCount).forEach(([habitat, count]) => {
-                checkPageSpace(5);
-                doc.text(`  ${this.capitalizeFirst(habitat)}: ${count}`, margin + 5, y);
-                y += 5;
-            });
-            
-            y += 5;
-            
-            // Count by observation type
-            const typeCount = {};
-            observations.forEach(obs => {
-                typeCount[obs.observationType] = (typeCount[obs.observationType] || 0) + 1;
-            });
-            
-            doc.text('Observations by Type:', margin, y);
-            y += 7;
-            
-            Object.entries(typeCount).forEach(([type, count]) => {
-                checkPageSpace(5);
-                doc.text(`  ${this.formatObservationType(type)}: ${count}`, margin + 5, y);
-                y += 5;
-            });
-            
-            y += 10;
-            
-            // Photos summary
-            const photoCount = observations.filter(obs => obs.photo).length;
-            doc.text(`Total photos included: ${photoCount}`, margin, y);
-            y += 7;
-            
-            // Date range
-            const dates = observations.map(obs => new Date(obs.timestamp)).sort((a, b) => a - b);
-            if (dates.length > 0) {
-                const firstDate = dates[0].toLocaleDateString();
-                const lastDate = dates[dates.length - 1].toLocaleDateString();
-                doc.text(`Date range: ${firstDate} to ${lastDate}`, margin, y);
-                y += 7;
-            }
-            
-            // Final message
-            y += 10;
-            doc.setFont('helvetica', 'italic');
-            doc.setTextColor(100);
-            doc.text('--- End of Report ---', pageWidth / 2, y, { align: 'center' });
-            
-            // Save PDF
-            updateProgress('save', 'Finalizing PDF...');
-            
-            const filename = `EcoLens_Field_Log_${new Date().toISOString().slice(0,10)}.pdf`;
-            const pdfBlob = doc.output('blob');
-            const pdfUrl = URL.createObjectURL(pdfBlob);
-            
-            // Complete progress
-            progressBar.value = 100;
-            statusText.textContent = 'PDF generation complete!';
-            currentAction.textContent = '';
-            
-            setTimeout(() => {
-                this.showExportDownload(pdfUrl, filename);
-                this.showStatus(`Successfully exported ${observations.length} observations to PDF`, 'success', 'export');
-                
-                // Reset UI
-                exportBtn.textContent = originalText;
-                exportBtn.disabled = false;
-                this.isGeneratingPDF = false;
-                
-                // Hide progress after 3 seconds
-                setTimeout(() => {
+            };
+
+            // Generate PDF asynchronously to show progress
+            setTimeout(async () => {
+                try {
+                    // Cover page
+                    updateProgress('cover', 'Creating cover page...');
+                    
+                    doc.setFontSize(24);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(40, 100, 60);
+                    doc.text('ECOLENS FIELD LOG', pageWidth / 2, 60, { align: 'center' });
+                    
+                    doc.setFontSize(16);
+                    doc.setTextColor(80);
+                    doc.text('Field Observation Report', pageWidth / 2, 75, { align: 'center' });
+                    
+                    // Report details
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'normal');
+                    y = 100;
+                    
+                    const dateFrom = document.getElementById('date-from').value;
+                    const dateTo = document.getElementById('date-to').value;
+                    let dateRangeText = 'All observations';
+                    if (dateFrom || dateTo) {
+                        dateRangeText = `From: ${dateFrom || 'Start'} to ${dateTo || 'End'}`;
+                    }
+                    
+                    doc.text(`Report Period: ${dateRangeText}`, pageWidth / 2, y, { align: 'center' });
+                    y += 10;
+                    doc.text(`Total Observations: ${totalObservations}`, pageWidth / 2, y, { align: 'center' });
+                    y += 10;
+                    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, y, { align: 'center' });
+                    y += 20;
+                    
+                    doc.setFontSize(10);
+                    doc.setTextColor(100);
+                    doc.text('This report contains detailed field observations including photos,', pageWidth / 2, y, { align: 'center' });
+                    y += 5;
+                    doc.text('location data, and comprehensive metadata for each record.', pageWidth / 2, y, { align: 'center' });
+                    
+                    // Table of contents
+                    doc.addPage();
+                    currentPage++;
+                    y = margin;
+                    
+                    // Add page header
+                    doc.setFontSize(10);
+                    doc.setTextColor(100);
+                    doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
+                    y += 5;
+                    
+                    // Add page separator
+                    doc.setDrawColor(200);
+                    doc.line(margin, y, pageWidth - margin, y);
+                    y += 10;
+                    
+                    updateProgress('toc', 'Creating table of contents...');
+                    
+                    // Table of contents header
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(40, 40, 40);
+                    doc.text('Table of Contents', margin, y);
+                    y += 8;
+                    
+                    // Add underline
+                    doc.setDrawColor(100, 150, 100);
+                    doc.line(margin, y, margin + 50, y);
+                    y += 10;
+                    
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(60);
+                    
+                    y += 10;
+                    observations.forEach((obs, index) => {
+                        // Check space for each TOC entry
+                        checkPageSpace(7);
+                        const entry = `${index + 1}. ${obs.scientificName} (${obs.id})`;
+                        doc.text(entry, margin, y);
+                        y += 7;
+                    });
+                    
+                    // Process each observation
+                    for (let i = 0; i < observations.length; i++) {
+                        const obs = observations[i];
+                        
+                        // Add new page for each observation
+                        doc.addPage();
+                        currentPage++;
+                        y = margin;
+                        
+                        // Add page header
+                        doc.setFontSize(10);
+                        doc.setTextColor(100);
+                        doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
+                        y += 5;
+                        
+                        // Add page separator
+                        doc.setDrawColor(200);
+                        doc.line(margin, y, pageWidth - margin, y);
+                        y += 10;
+                        
+                        updateProgress('observation', `Adding observation: ${obs.scientificName}`);
+                        
+                        // Observation header
+                        checkPageSpace(20); // Space for header
+                        doc.setFontSize(14);
+                        doc.setFont('helvetica', 'bold');
+                        doc.setTextColor(40, 40, 40);
+                        doc.text(`Observation ${i + 1}: ${obs.id}`, margin, y);
+                        y += 10;
+                        
+                        // Observation details in two columns
+                        const col1X = margin;
+                        const col2X = margin + (contentWidth / 2) + 5;
+                        const columnWidth = (contentWidth / 2) - 5;
+                        
+                        // Start columns at same y position
+                        let col1Y = y;
+                        let col2Y = y;
+                        
+                        // COLUMN 1: Basic Information
+                        doc.setFontSize(10);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('BASIC INFORMATION', col1X, col1Y);
+                        col1Y += 7; // Space after heading
+                        doc.setFont('helvetica', 'normal');
+                        
+                        // Add key-value pairs in column 1
+                        const col1Items = [
+                            { key: 'Date/Time', value: new Date(obs.timestamp).toLocaleString() },
+                            { key: 'Scientific Name', value: obs.scientificName },
+                            { key: 'Common Name', value: obs.commonName || 'Not specified' },
+                            { key: 'Habitat', value: this.capitalizeFirst(obs.habitat) },
+                            { key: 'Observation Type', value: this.formatObservationType(obs.observationType) }
+                        ];
+                        
+                        col1Items.forEach(item => {
+                            doc.setFont('helvetica', 'bold');
+                            const keyText = `${item.key}: `;
+                            const keyWidth = doc.getTextWidth(keyText);
+                            doc.text(keyText, col1X, col1Y);
+                            
+                            doc.setFont('helvetica', 'normal');
+                            const wrappedLines = doc.splitTextToSize(item.value, columnWidth - keyWidth);
+                            
+                            // Handle multi-line values
+                            if (wrappedLines.length === 1) {
+                                doc.text(item.value, col1X + keyWidth, col1Y);
+                                col1Y += 5;
+                            } else {
+                                // First line
+                                doc.text(wrappedLines[0], col1X + keyWidth, col1Y);
+                                col1Y += 5;
+                                
+                                // Subsequent lines (indented)
+                                for (let j = 1; j < wrappedLines.length; j++) {
+                                    doc.text(wrappedLines[j], col1X + keyWidth, col1Y);
+                                    col1Y += 5;
+                                }
+                            }
+                            col1Y += 1; // Extra space between items
+                        });
+                        
+                        // COLUMN 2: Location & Equipment
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('LOCATION & EQUIPMENT', col2X, col2Y);
+                        col2Y += 7; // Space after heading
+                        doc.setFont('helvetica', 'normal');
+                        
+                        // Add key-value pairs in column 2
+                        const col2Items = [];
+                        
+                        // Location text
+                        col2Items.push({ key: 'Location', value: obs.location.text });
+                        
+                        // Coordinates if available
+                        if (obs.location.coordinates) {
+                            const coords = `Lat: ${obs.location.coordinates.lat.toFixed(5)}, Lng: ${obs.location.coordinates.lng.toFixed(5)}`;
+                            col2Items.push({ key: 'Coordinates', value: coords });
+                        }
+                        
+                        // Accuracy if available
+                        if (obs.location.accuracy) {
+                            col2Items.push({ key: 'Accuracy', value: `±${Math.round(obs.location.accuracy)} meters` });
+                        }
+                        
+                        // Equipment if available
+                        if (obs.equipment && obs.equipment.length > 0) {
+                            const equipmentText = obs.equipment.map(eq => this.formatEquipment(eq)).join(', ');
+                            col2Items.push({ key: 'Equipment Used', value: equipmentText });
+                        }
+                        
+                        // References if available
+                        if (obs.references) {
+                            col2Items.push({ key: 'References', value: obs.references });
+                        }
+                        
+                        col2Items.forEach(item => {
+                            doc.setFont('helvetica', 'bold');
+                            const keyText = `${item.key}: `;
+                            const keyWidth = doc.getTextWidth(keyText);
+                            doc.text(keyText, col2X, col2Y);
+                            
+                            doc.setFont('helvetica', 'normal');
+                            const wrappedLines = doc.splitTextToSize(item.value, columnWidth - keyWidth);
+                            
+                            // Handle multi-line values
+                            if (wrappedLines.length === 1) {
+                                doc.text(item.value, col2X + keyWidth, col2Y);
+                                col2Y += 5;
+                            } else {
+                                // First line
+                                doc.text(wrappedLines[0], col2X + keyWidth, col2Y);
+                                col2Y += 5;
+                                
+                                // Subsequent lines (indented)
+                                for (let j = 1; j < wrappedLines.length; j++) {
+                                    doc.text(wrappedLines[j], col2X + keyWidth, col2Y);
+                                    col2Y += 5;
+                                }
+                            }
+                            col2Y += 1; // Extra space between items
+                        });
+                        
+                        // Set y to the bottom of the tallest column
+                        y = Math.max(col1Y, col2Y) + 10;
+                        
+                        // Characteristics section
+                        if (obs.characteristics) {
+                            // Add section spacing
+                            y += 5;
+                            checkPageSpace(15);
+                            
+                            // Section header
+                            doc.setFontSize(12);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(40, 40, 40);
+                            doc.text('DESCRIPTION / CHARACTERISTICS', margin, y);
+                            y += 8;
+                            
+                            // Add underline
+                            doc.setDrawColor(100, 150, 100);
+                            doc.line(margin, y, margin + 50, y);
+                            y += 10;
+                            
+                            doc.setFontSize(10);
+                            doc.setFont('helvetica', 'normal');
+                            doc.setTextColor(60);
+                            
+                            y = addWrappedText(obs.characteristics, margin, y, contentWidth, 5);
+                            y += 10;
+                        }
+                        
+                        // Notes section
+                        if (obs.notes) {
+                            // Add section spacing
+                            y += 5;
+                            checkPageSpace(15);
+                            
+                            // Section header
+                            doc.setFontSize(12);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(40, 40, 40);
+                            doc.text('ADDITIONAL NOTES', margin, y);
+                            y += 8;
+                            
+                            // Add underline
+                            doc.setDrawColor(100, 150, 100);
+                            doc.line(margin, y, margin + 50, y);
+                            y += 10;
+                            
+                            doc.setFontSize(10);
+                            doc.setFont('helvetica', 'normal');
+                            doc.setTextColor(60);
+                            
+                            y = addWrappedText(obs.notes, margin, y, contentWidth, 5);
+                            y += 10;
+                        }
+                        
+                        // Photo section
+                        if (obs.photo && obs.photo.data) {
+                            // Add section spacing
+                            y += 5;
+                            checkPageSpace(15);
+                            
+                            // Section header
+                            doc.setFontSize(12);
+                            doc.setFont('helvetica', 'bold');
+                            doc.setTextColor(40, 40, 40);
+                            doc.text('PHOTO / EVIDENCE', margin, y);
+                            y += 8;
+                            
+                            // Add underline
+                            doc.setDrawColor(100, 150, 100);
+                            doc.line(margin, y, margin + 50, y);
+                            y += 10;
+                            
+                            try {
+                                updateProgress('photo', `Adding photo for: ${obs.scientificName}`);
+                                
+                                // Check if we have enough space for the photo (80mm minimum)
+                                checkPageSpace(80);
+                                
+                                // Add photo caption
+                                doc.setFontSize(9);
+                                doc.setTextColor(80);
+                                doc.text('Observation Photo:', margin, y);
+                                y += 5;
+                                
+                                // Add photo with fixed aspect ratio
+                                const maxImgWidth = contentWidth;
+                                const maxImgHeight = 80; // Max height for photos
+                                
+                                // Convert base64 to image object
+                                const img = new Image();
+                                await new Promise((resolve, reject) => {
+                                    img.onload = resolve;
+                                    img.onerror = reject;
+                                    img.src = obs.photo.data;
+                                });
+                                
+                                // Calculate dimensions maintaining aspect ratio
+                                let imgWidth = img.width;
+                                let imgHeight = img.height;
+                                const aspectRatio = imgWidth / imgHeight;
+                                
+                                if (imgWidth > maxImgWidth) {
+                                    imgWidth = maxImgWidth;
+                                    imgHeight = imgWidth / aspectRatio;
+                                }
+                                
+                                if (imgHeight > maxImgHeight) {
+                                    imgHeight = maxImgHeight;
+                                    imgWidth = imgHeight * aspectRatio;
+                                }
+                                
+                                // Center the image
+                                const imgX = margin + (contentWidth - imgWidth) / 2;
+                                
+                                // Add image to PDF
+                                doc.addImage(
+                                    img,
+                                    'JPEG',
+                                    imgX,
+                                    y,
+                                    imgWidth,
+                                    imgHeight
+                                );
+                                
+                                y += imgHeight + 10;
+                                
+                                // Add photo metadata
+                                doc.setFontSize(8);
+                                doc.setTextColor(100);
+                                const imgMetadata = `File: ${obs.photo.filename || 'photo.jpg'} | Included in record`;
+                                doc.text(imgMetadata, margin, y);
+                                y += 6;
+                                
+                            } catch (error) {
+                                console.error('Error adding photo to PDF:', error);
+                                doc.setFontSize(9);
+                                doc.setTextColor(150, 0, 0);
+                                doc.text('Photo could not be included in PDF (format issue)', margin, y);
+                                y += 10;
+                            }
+                        }
+                        
+                        // Metadata footer
+                        doc.setFontSize(8);
+                        doc.setTextColor(120);
+                        doc.setFont('helvetica', 'italic');
+                        
+                        // Check space for metadata
+                        checkPageSpace(20);
+                        
+                        const metadataLines = [
+                            `Record ID: ${obs.id}`,
+                            `Created: ${new Date(obs.timestamp).toLocaleString()}`,
+                            `Last Modified: ${new Date(obs.metadata.lastModified).toLocaleString()}`,
+                            `Device: ${obs.metadata.deviceInfo.substring(0, 40)}...`
+                        ];
+                        
+                        metadataLines.forEach(line => {
+                            doc.text(line, margin, y);
+                            y += 4;
+                        });
+                        
+                        y += 10;
+                        
+                        // Add page separator if not last observation
+                        if (i < observations.length - 1) {
+                            checkPageSpace(15);
+                            doc.setDrawColor(200);
+                            doc.setLineWidth(0.5);
+                            doc.line(margin, y, pageWidth - margin, y);
+                            y += 15;
+                        }
+                    }
+                    
+                    // Final page - summary
+                    doc.addPage();
+                    currentPage++;
+                    y = margin;
+                    
+                    // Add page header
+                    doc.setFontSize(10);
+                    doc.setTextColor(100);
+                    doc.text(`EcoLens Field Log - Page ${currentPage}`, margin, y);
+                    y += 5;
+                    
+                    // Add page separator
+                    doc.setDrawColor(200);
+                    doc.line(margin, y, pageWidth - margin, y);
+                    y += 10;
+                    
+                    updateProgress('summary', 'Adding summary page...');
+                    
+                    // Summary header
+                    doc.setFontSize(12);
+                    doc.setFont('helvetica', 'bold');
+                    doc.setTextColor(40, 40, 40);
+                    doc.text('REPORT SUMMARY', margin, y);
+                    y += 8;
+                    
+                    // Add underline
+                    doc.setDrawColor(100, 150, 100);
+                    doc.line(margin, y, margin + 50, y);
+                    y += 10;
+                    
+                    doc.setFontSize(10);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(60);
+                    
+                    y += 10;
+                    
+                    doc.setFontSize(11);
+                    doc.setFont('helvetica', 'bold');
+                    doc.text('Statistics:', margin, y);
+                    y += 10;
+                    
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(10);
+                    
+                    // Count by habitat
+                    const habitatCount = {};
+                    observations.forEach(obs => {
+                        habitatCount[obs.habitat] = (habitatCount[obs.habitat] || 0) + 1;
+                    });
+                    
+                    doc.text('Observations by Habitat Type:', margin, y);
+                    y += 7;
+                    
+                    Object.entries(habitatCount).forEach(([habitat, count]) => {
+                        checkPageSpace(5);
+                        doc.text(`  ${this.capitalizeFirst(habitat)}: ${count}`, margin + 5, y);
+                        y += 5;
+                    });
+                    
+                    y += 5;
+                    
+                    // Count by observation type
+                    const typeCount = {};
+                    observations.forEach(obs => {
+                        typeCount[obs.observationType] = (typeCount[obs.observationType] || 0) + 1;
+                    });
+                    
+                    doc.text('Observations by Type:', margin, y);
+                    y += 7;
+                    
+                    Object.entries(typeCount).forEach(([type, count]) => {
+                        checkPageSpace(5);
+                        doc.text(`  ${this.formatObservationType(type)}: ${count}`, margin + 5, y);
+                        y += 5;
+                    });
+                    
+                    y += 10;
+                    
+                    // Photos summary
+                    const photoCount = observations.filter(obs => obs.photo).length;
+                    doc.text(`Total photos included: ${photoCount}`, margin, y);
+                    y += 7;
+                    
+                    // Date range
+                    const dates = observations.map(obs => new Date(obs.timestamp)).sort((a, b) => a - b);
+                    if (dates.length > 0) {
+                        const firstDate = dates[0].toLocaleDateString();
+                        const lastDate = dates[dates.length - 1].toLocaleDateString();
+                        doc.text(`Date range: ${firstDate} to ${lastDate}`, margin, y);
+                        y += 7;
+                    }
+                    
+                    // Final message
+                    y += 10;
+                    doc.setFont('helvetica', 'italic');
+                    doc.setTextColor(100);
+                    doc.text('--- End of Report ---', pageWidth / 2, y, { align: 'center' });
+                    
+                    // Save PDF
+                    updateProgress('save', 'Finalizing PDF...');
+                    
+                    const filename = `EcoLens_Field_Log_${new Date().toISOString().slice(0,10)}.pdf`;
+                    const pdfBlob = doc.output('blob');
+                    const pdfUrl = URL.createObjectURL(pdfBlob);
+                    
+                    // Complete progress
+                    progressBar.value = 100;
+                    statusText.textContent = 'PDF generation complete!';
+                    currentAction.textContent = '';
+                    
+                    setTimeout(() => {
+                        this.showExportDownload(pdfUrl, filename);
+                        this.showStatus(`Successfully exported ${observations.length} observations to PDF`, 'success', 'export');
+                        
+                        // Reset UI
+                        exportBtn.textContent = originalText;
+                        exportBtn.disabled = false;
+                        this.isGeneratingPDF = false;
+                        
+                        // Hide progress after 3 seconds
+                        setTimeout(() => {
+                            progressUI.style.display = 'none';
+                        }, 3000);
+                    }, 500);
+                    
+                } catch (error) {
+                    console.error('Error generating PDF:', error);
+                    this.showStatus(`Error generating PDF: ${error.message}`, 'error', 'export');
+                    
+                    // Reset UI
+                    exportBtn.textContent = originalText;
+                    exportBtn.disabled = false;
+                    this.isGeneratingPDF = false;
                     progressUI.style.display = 'none';
-                }, 3000);
-            }, 500);
+                }
+            }, 100);
+        },
+
+        // Show export download link
+        showExportDownload(url, filename) {
+            const downloadLink = document.getElementById('download-link');
+            downloadLink.href = url;
+            downloadLink.download = filename;
+            document.getElementById('export-download').style.display = 'block';
+            downloadLink.scrollIntoView({ behavior: 'smooth' });
+        },
+
+        // Show status message
+        showStatus(message, type = 'info', panel = 'record') {
+            const statusEl = document.getElementById(`${panel}-status`);
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
             
-        } catch (error) {
-            console.error('Error generating PDF:', error);
-            this.showStatus(`Error generating PDF: ${error.message}`, 'error', 'export');
+            // Auto-hide success messages after 5 seconds
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        },
+
+        // Show location status
+        showLocationStatus(message, type = 'info') {
+            const statusEl = document.getElementById('location-status');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
             
-            // Reset UI
-            exportBtn.textContent = originalText;
-            exportBtn.disabled = false;
-            this.isGeneratingPDF = false;
-            progressUI.style.display = 'none';
+            if (type === 'error') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        },
+
+        // Update date inputs with current date
+        updateDateInputs() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date-from').value = today;
+            document.getElementById('date-to').value = today;
+            document.getElementById('date-from').max = today;
+            document.getElementById('date-to').max = today;
+        },
+
+        // Utility: Format observation type for display
+        formatObservationType(type) {
+            const typeMap = {
+                'direct': 'Direct sighting',
+                'scat': 'Scat/droppings',
+                'track': 'Track/footprint',
+                'call': 'Call/sound',
+                'nest': 'Nest/den',
+                'roadkill': 'Roadkill',
+                'feather': 'Feather',
+                'bone': 'Bone/skull',
+                'other': 'Other evidence'
+            };
+            return typeMap[type] || this.capitalizeFirst(type);
+        },
+
+        // Utility: Format equipment for display
+        formatEquipment(equipment) {
+            const eqMap = {
+                'binoculars': 'Binoculars',
+                'camera': 'Camera',
+                'hand-lens': 'Hand lens',
+                'gps': 'GPS',
+                'microscope': 'Microscope',
+                'hair-tube': 'Hair tube',
+                'pitfall-trap': 'Pitfall trap',
+                'camera-trap': 'Camera trap',
+                'other-equipment': 'Other'
+            };
+            
+            if (equipment.startsWith('other: ')) {
+                return equipment.substring(7);
+            }
+            
+            return eqMap[equipment] || this.capitalizeFirst(equipment);
+        },
+
+        // Utility: Escape HTML to prevent XSS
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        },
+
+        // Utility: Capitalize first letter
+        capitalizeFirst(string) {
+            return string ? string.charAt(0).toUpperCase() + string.slice(1) : '';
         }
-    }, 100);
-}
+    };
+
+    // Initialize the app when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+        EcoLens.init();
+    });
+
+    // Add offline detection
+    window.addEventListener('online', () => {
+        console.log('App is online');
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('App is offline - data saved locally');
+        EcoLens.showStatus('You are offline. Observations are saved locally.', 'info');
+    });
+
+    // Check if localStorage is available
+    try {
+        localStorage.setItem('test', 'test');
+        localStorage.removeItem('test');
+    } catch (e) {
+        console.error('localStorage is not available:', e);
+        EcoLens.showStatus('Warning: Local storage is disabled. Data will not be saved.', 'error');
+    }
+</script>
