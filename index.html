@@ -119,6 +119,11 @@
             color: #34495e;
         }
 
+        .form-label.required::after {
+            content: " *";
+            color: #e74c3c;
+        }
+
         .form-input,
         .form-select,
         .form-textarea {
@@ -139,9 +144,19 @@
         }
 
         .form-textarea {
-            min-height: 120px;
+            min-height: 100px;
             resize: vertical;
             font-family: inherit;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .form-col {
+            flex: 1;
         }
 
         /* Map Container */
@@ -157,6 +172,12 @@
         #map {
             height: 100%;
             width: 100%;
+        }
+
+        .map-controls {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
         }
 
         /* Button Styles */
@@ -233,6 +254,42 @@
             margin-top: 0.5rem;
             border: 2px solid #e0e0e0;
             display: none;
+        }
+
+        /* Checkbox/Radio Groups */
+        .checkbox-group,
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .checkbox-item,
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checkbox-item input[type="checkbox"],
+        .radio-item input[type="radio"] {
+            width: auto;
+        }
+
+        /* DateTime Input */
+        .datetime-inputs {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .datetime-inputs input {
+            flex: 1;
+        }
+
+        .datetime-now-btn {
+            white-space: nowrap;
         }
 
         /* Logbook Styles */
@@ -363,6 +420,28 @@
             border: 1px solid #bee5eb;
         }
 
+        .status-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        /* Loading Indicator */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         /* Mobile Optimizations */
         @media (max-width: 768px) {
             .main-content {
@@ -386,12 +465,26 @@
                 font-size: 0.85rem;
             }
             
+            .form-row {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .datetime-inputs {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
             .date-range {
                 flex-direction: column;
                 gap: 0.5rem;
             }
             
             .log-actions {
+                flex-direction: column;
+            }
+            
+            .map-controls {
                 flex-direction: column;
             }
             
@@ -432,55 +525,169 @@
             <div class="form-section">
                 <h2 class="form-title">New Field Observation</h2>
                 
+                <!-- Date & Time -->
                 <div class="form-group">
-                    <label class="form-label" for="species">Species Name</label>
-                    <input type="text" id="species" class="form-input" placeholder="Enter species name" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label" for="location">Location</label>
-                    <input type="text" id="location" class="form-input" placeholder="Describe the location">
-                    <button type="button" id="toggle-map" class="btn btn-outline" style="margin-top: 0.5rem;">
-                        <span id="map-toggle-text">📍 Get from map</span>
-                    </button>
-                    <div id="map-container">
-                        <div id="map"></div>
+                    <label class="form-label required" for="observation-date">Observation Date & Time</label>
+                    <div class="datetime-inputs">
+                        <input type="date" id="observation-date" class="form-input" required>
+                        <input type="time" id="observation-time" class="form-input" required>
+                        <button type="button" id="set-now" class="btn btn-outline datetime-now-btn">
+                            Now
+                        </button>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label" for="habitat">Habitat Type</label>
-                    <select id="habitat" class="form-select">
-                        <option value="">Select habitat type</option>
-                        <option value="forest">Forest</option>
-                        <option value="wetland">Wetland</option>
-                        <option value="grassland">Grassland</option>
-                        <option value="coastal">Coastal</option>
-                        <option value="urban">Urban</option>
-                        <option value="agricultural">Agricultural</option>
-                        <option value="alpine">Alpine</option>
-                        <option value="riverine">Riverine</option>
-                        <option value="desert">Desert</option>
-                        <option value="other">Other</option>
-                    </select>
+                <!-- Species Information -->
+                <div class="form-row">
+                    <div class="form-col">
+                        <label class="form-label required" for="scientific-name">Scientific Name</label>
+                        <input type="text" id="scientific-name" class="form-input" 
+                               placeholder="Genus species" required>
+                    </div>
+                    <div class="form-col">
+                        <label class="form-label" for="common-name">Common Name</label>
+                        <input type="text" id="common-name" class="form-input" 
+                               placeholder="Local/common name">
+                    </div>
                 </div>
 
+                <!-- Location -->
                 <div class="form-group">
-                    <label class="form-label" for="notes">Observation Notes</label>
-                    <textarea id="notes" class="form-textarea" placeholder="Record your observations, measurements, weather conditions, etc."></textarea>
+                    <label class="form-label required" for="location">Location</label>
+                    <input type="text" id="location" class="form-input" 
+                           placeholder="Describe the location" required>
+                    <div class="map-controls">
+                        <button type="button" id="toggle-map" class="btn btn-outline">
+                            <span id="map-toggle-text">🗺️ Show Map</span>
+                        </button>
+                        <button type="button" id="use-my-location" class="btn btn-outline">
+                            📍 Use My Location
+                        </button>
+                    </div>
+                    <div id="map-container">
+                        <div id="map"></div>
+                    </div>
+                    <div id="location-status" class="status-message" style="display: none; margin-top: 0.5rem;"></div>
                 </div>
 
+                <!-- Habitat & Observation Type -->
+                <div class="form-row">
+                    <div class="form-col">
+                        <label class="form-label required" for="habitat">Habitat Type</label>
+                        <select id="habitat" class="form-select" required>
+                            <option value="">Select habitat type</option>
+                            <option value="forest">Forest</option>
+                            <option value="wetland">Wetland</option>
+                            <option value="grassland">Grassland</option>
+                            <option value="coastal">Coastal</option>
+                            <option value="urban">Urban</option>
+                            <option value="agricultural">Agricultural</option>
+                            <option value="alpine">Alpine</option>
+                            <option value="riverine">Riverine</option>
+                            <option value="desert">Desert</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-col">
+                        <label class="form-label required" for="observation-type">Observation Type</label>
+                        <select id="observation-type" class="form-select" required>
+                            <option value="">Select type</option>
+                            <option value="direct">Direct sighting</option>
+                            <option value="scat">Scat/droppings</option>
+                            <option value="track">Track/footprint</option>
+                            <option value="call">Call/sound</option>
+                            <option value="nest">Nest/den</option>
+                            <option value="roadkill">Roadkill</option>
+                            <option value="feather">Feather</option>
+                            <option value="bone">Bone/skull</option>
+                            <option value="other">Other evidence</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Characteristics -->
                 <div class="form-group">
-                    <label class="form-label">Photo</label>
+                    <label class="form-label" for="characteristics">Description / Characteristics</label>
+                    <textarea id="characteristics" class="form-textarea" 
+                              placeholder="Describe size, color, markings, behavior, age, sex, weather conditions, etc."></textarea>
+                </div>
+
+                <!-- Notes -->
+                <div class="form-group">
+                    <label class="form-label" for="notes">Additional Notes</label>
+                    <textarea id="notes" class="form-textarea" 
+                              placeholder="Any other relevant observations or comments"></textarea>
+                </div>
+
+                <!-- Equipment Used -->
+                <div class="form-group">
+                    <label class="form-label">Equipment Used</label>
+                    <div class="checkbox-group">
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="binoculars">
+                            Binoculars
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="camera">
+                            Camera
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="hand-lens">
+                            Hand lens
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="gps">
+                            GPS
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="microscope">
+                            Microscope
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="hair-tube">
+                            Hair tube
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="pitfall-trap">
+                            Pitfall trap
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="camera-trap">
+                            Camera trap
+                        </label>
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="equipment" value="other-equipment">
+                            Other
+                        </label>
+                    </div>
+                    <input type="text" id="other-equipment" class="form-input" 
+                           placeholder="Other equipment used" style="margin-top: 0.5rem; display: none;">
+                </div>
+
+                <!-- Reference Material -->
+                <div class="form-group">
+                    <label class="form-label" for="references">Reference Material Used</label>
+                    <textarea id="references" class="form-textarea" 
+                              placeholder="Field guides, apps, websites, or other references consulted"></textarea>
+                </div>
+
+                <!-- Photo -->
+                <div class="form-group">
+                    <label class="form-label">Photo / Evidence</label>
                     <button type="button" id="capture-photo" class="btn btn-outline">
                         📷 Take photo/Upload
                     </button>
                     <input type="file" id="photo-upload" accept="image/*" capture="environment" style="display: none;">
                     <div class="photo-container">
                         <img id="photo-preview" class="photo-preview" alt="Photo preview">
+                        <div id="photo-info" style="margin-top: 0.5rem; font-size: 0.9rem; color: #666; display: none;">
+                            <span id="photo-size">Size: --</span> | 
+                            <span id="photo-resolution">Resolution: --</span>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Submit Button -->
                 <button id="record-btn" class="btn btn-primary btn-block">
                     📝 Record Observation
                 </button>
@@ -546,10 +753,22 @@
     </div>
 
     <script>
-        // Habitat types for dropdown and validation
+        // Habitat types for dropdown
         const HABITAT_TYPES = [
             'forest', 'wetland', 'grassland', 'coastal', 'urban',
             'agricultural', 'alpine', 'riverine', 'desert', 'other'
+        ];
+
+        // Observation types
+        const OBSERVATION_TYPES = [
+            'direct', 'scat', 'track', 'call', 'nest',
+            'roadkill', 'feather', 'bone', 'other'
+        ];
+
+        // Equipment options
+        const EQUIPMENT_OPTIONS = [
+            'binoculars', 'camera', 'hand-lens', 'gps', 'microscope',
+            'hair-tube', 'pitfall-trap', 'camera-trap', 'other-equipment'
         ];
 
         // Main application state
@@ -559,6 +778,7 @@
             map: null,
             mapMarker: null,
             mapEnabled: false,
+            isLocating: false,
 
             // Initialize the application
             init() {
@@ -566,7 +786,18 @@
                 this.setupEventListeners();
                 this.renderLogbook();
                 this.updateDateInputs();
+                this.setCurrentDateTime();
                 console.log('EcoLens initialized with', this.observations.length, 'observations');
+            },
+
+            // Set current date/time in form
+            setCurrentDateTime() {
+                const now = new Date();
+                const dateStr = now.toISOString().split('T')[0];
+                const timeStr = now.toTimeString().slice(0, 5);
+                
+                document.getElementById('observation-date').value = dateStr;
+                document.getElementById('observation-time').value = timeStr;
             },
 
             // Generate a unique observation ID
@@ -576,24 +807,30 @@
                 return `ECO-${date}-${random}`.toUpperCase();
             },
 
-            // Create a new observation object
+            // Create a new observation object with all fields
             createObservation(data) {
-                const timestamp = new Date().toISOString();
+                const dateTime = new Date(data.date + 'T' + data.time);
                 return {
                     id: this.generateObservationId(),
-                    timestamp: timestamp,
-                    species: data.species.trim(),
+                    timestamp: dateTime.toISOString(),
+                    scientificName: data.scientificName.trim(),
+                    commonName: data.commonName?.trim() || '',
                     location: {
                         text: data.location.trim(),
-                        coordinates: data.coordinates || null
+                        coordinates: data.coordinates || null,
+                        accuracy: data.accuracy || null
                     },
                     habitat: data.habitat,
-                    notes: data.notes.trim(),
+                    observationType: data.observationType,
+                    characteristics: data.characteristics?.trim() || '',
+                    notes: data.notes?.trim() || '',
+                    equipment: data.equipment || [],
+                    references: data.references?.trim() || '',
                     photo: data.photo,
                     metadata: {
                         deviceInfo: navigator.userAgent,
                         appVersion: '1.0',
-                        lastModified: timestamp
+                        lastModified: new Date().toISOString()
                     }
                 };
             },
@@ -669,6 +906,11 @@
                     });
                 });
 
+                // Set current date/time button
+                document.getElementById('set-now').addEventListener('click', () => {
+                    this.setCurrentDateTime();
+                });
+
                 // Record observation
                 document.getElementById('record-btn').addEventListener('click', () => {
                     this.handleRecordObservation();
@@ -679,6 +921,11 @@
                     this.toggleMap();
                 });
 
+                // Use my location
+                document.getElementById('use-my-location').addEventListener('click', () => {
+                    this.getUserLocation();
+                });
+
                 // Photo handling
                 document.getElementById('capture-photo').addEventListener('click', () => {
                     document.getElementById('photo-upload').click();
@@ -686,6 +933,16 @@
 
                 document.getElementById('photo-upload').addEventListener('change', (e) => {
                     this.handlePhotoUpload(e);
+                });
+
+                // Equipment other input toggle
+                document.querySelectorAll('input[name="equipment"]').forEach(checkbox => {
+                    checkbox.addEventListener('change', (e) => {
+                        if (e.target.value === 'other-equipment') {
+                            document.getElementById('other-equipment').style.display = 
+                                e.target.checked ? 'block' : 'none';
+                        }
+                    });
                 });
 
                 // Export generation
@@ -722,37 +979,81 @@
 
             // Handle recording a new observation
             handleRecordObservation() {
-                const species = document.getElementById('species').value.trim();
+                // Get all form values
+                const date = document.getElementById('observation-date').value;
+                const time = document.getElementById('observation-time').value;
+                const scientificName = document.getElementById('scientific-name').value.trim();
+                const commonName = document.getElementById('common-name').value.trim();
                 const location = document.getElementById('location').value.trim();
                 const habitat = document.getElementById('habitat').value;
+                const observationType = document.getElementById('observation-type').value;
+                const characteristics = document.getElementById('characteristics').value.trim();
                 const notes = document.getElementById('notes').value.trim();
+                const references = document.getElementById('references').value.trim();
 
-                // Basic validation
-                if (!species) {
-                    this.showStatus('Please enter a species name', 'error');
-                    document.getElementById('species').focus();
+                // Get equipment used
+                const equipment = [];
+                document.querySelectorAll('input[name="equipment"]:checked').forEach(cb => {
+                    equipment.push(cb.value);
+                });
+                
+                // Add other equipment if specified
+                const otherEquipment = document.getElementById('other-equipment').value.trim();
+                if (otherEquipment && equipment.includes('other-equipment')) {
+                    equipment[equipment.indexOf('other-equipment')] = `other: ${otherEquipment}`;
+                }
+
+                // Validation
+                if (!date || !time) {
+                    this.showStatus('Please enter observation date and time', 'error');
                     return;
                 }
 
-                if (!location && !this.mapEnabled) {
+                if (!scientificName) {
+                    this.showStatus('Please enter scientific name', 'error');
+                    document.getElementById('scientific-name').focus();
+                    return;
+                }
+
+                if (!location && !this.mapMarker) {
                     this.showStatus('Please enter a location or use the map', 'error');
+                    return;
+                }
+
+                if (!habitat) {
+                    this.showStatus('Please select habitat type', 'error');
+                    return;
+                }
+
+                if (!observationType) {
+                    this.showStatus('Please select observation type', 'error');
                     return;
                 }
 
                 // Get coordinates if map is enabled
                 let coordinates = null;
+                let accuracy = null;
                 if (this.mapMarker) {
                     const latlng = this.mapMarker.getLatLng();
                     coordinates = { lat: latlng.lat, lng: latlng.lng };
+                    accuracy = this.mapMarker.options.accuracy || null;
                 }
 
                 // Create observation
                 const observation = this.createObservation({
-                    species,
+                    date,
+                    time,
+                    scientificName,
+                    commonName,
                     location: location || 'Map location selected',
                     coordinates,
+                    accuracy,
                     habitat,
+                    observationType,
+                    characteristics,
                     notes,
+                    equipment,
+                    references,
                     photo: this.currentPhoto
                 });
 
@@ -767,13 +1068,29 @@
 
             // Reset the form
             resetForm() {
-                document.getElementById('species').value = '';
+                // Reset all form fields
+                this.setCurrentDateTime();
+                document.getElementById('scientific-name').value = '';
+                document.getElementById('common-name').value = '';
                 document.getElementById('location').value = '';
                 document.getElementById('habitat').value = '';
+                document.getElementById('observation-type').value = '';
+                document.getElementById('characteristics').value = '';
                 document.getElementById('notes').value = '';
+                document.getElementById('references').value = '';
+                
+                // Reset equipment checkboxes
+                document.querySelectorAll('input[name="equipment"]').forEach(cb => {
+                    cb.checked = false;
+                });
+                document.getElementById('other-equipment').style.display = 'none';
+                document.getElementById('other-equipment').value = '';
+                
+                // Reset photo
                 document.getElementById('photo-preview').style.display = 'none';
                 document.getElementById('photo-preview').src = '';
                 document.getElementById('photo-upload').value = '';
+                document.getElementById('photo-info').style.display = 'none';
                 this.currentPhoto = null;
                 
                 // Reset map
@@ -785,6 +1102,17 @@
                 // Hide map if shown
                 if (this.mapEnabled) {
                     this.toggleMap(false);
+                }
+                
+                // Reset location status
+                document.getElementById('location-status').style.display = 'none';
+                
+                // Reset record button if editing
+                const recordBtn = document.getElementById('record-btn');
+                if (recordBtn.dataset.editingId) {
+                    recordBtn.textContent = '📝 Record Observation';
+                    recordBtn.onclick = () => this.handleRecordObservation();
+                    delete recordBtn.dataset.editingId;
                 }
             },
 
@@ -799,44 +1127,131 @@
                 if (this.mapEnabled) {
                     // Show map
                     mapContainer.style.display = 'block';
-                    toggleText.textContent = '🗺️ Hide map';
+                    toggleText.textContent = '🗺️ Hide Map';
                     
                     // Initialize map if not already done
                     if (!this.map) {
                         this.initMap();
+                    } else {
+                        // Update map size if it was hidden
+                        setTimeout(() => {
+                            this.map.invalidateSize();
+                        }, 100);
                     }
                 } else {
                     // Hide map
                     mapContainer.style.display = 'none';
-                    toggleText.textContent = '📍 Get from map';
+                    toggleText.textContent = '🗺️ Show Map';
                 }
             },
 
             // Initialize Leaflet map
             initMap() {
-                this.map = L.map('map').setView([-35.0, 149.0], 10);
+                // Default to Canberra if no location yet
+                const defaultCenter = [-35.2809, 149.1300];
+                this.map = L.map('map').setView(defaultCenter, 13);
                 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     attribution: '© OpenStreetMap contributors',
-                    maxZoom: 18
+                    maxZoom: 19
                 }).addTo(this.map);
 
                 // Add click handler for map
                 this.map.on('click', (e) => {
-                    if (this.mapMarker) {
-                        this.map.removeLayer(this.mapMarker);
-                    }
-                    
-                    this.mapMarker = L.marker(e.latlng).addTo(this.map);
-                    
-                    // Reverse geocode to get location name (simplified - in production, use Nominatim API)
-                    const lat = e.latlng.lat.toFixed(5);
-                    const lng = e.latlng.lng.toFixed(5);
-                    document.getElementById('location').value = `Lat: ${lat}, Lng: ${lng}`;
+                    this.addMarker(e.latlng);
                 });
             },
 
-            // Handle photo upload
+            // Add marker to map
+            addMarker(latlng, accuracy = null) {
+                if (this.mapMarker) {
+                    this.map.removeLayer(this.mapMarker);
+                }
+                
+                // Create marker with optional accuracy circle
+                this.mapMarker = L.marker(latlng).addTo(this.map);
+                
+                if (accuracy) {
+                    this.mapMarker.options.accuracy = accuracy;
+                    L.circle(latlng, {
+                        radius: accuracy,
+                        color: '#3498db',
+                        fillColor: '#3498db',
+                        fillOpacity: 0.1
+                    }).addTo(this.map);
+                }
+                
+                // Update location field
+                const lat = latlng.lat.toFixed(5);
+                const lng = latlng.lng.toFixed(5);
+                document.getElementById('location').value = `Lat: ${lat}, Lng: ${lng}`;
+                
+                // Center map on marker
+                this.map.setView(latlng, Math.max(this.map.getZoom(), 15));
+            },
+
+            // Get user's current location
+            getUserLocation() {
+                if (!navigator.geolocation) {
+                    this.showLocationStatus('Geolocation is not supported by your browser', 'error');
+                    return;
+                }
+
+                this.isLocating = true;
+                const locateBtn = document.getElementById('use-my-location');
+                const originalText = locateBtn.textContent;
+                locateBtn.innerHTML = '<span class="loading"></span> Locating...';
+                locateBtn.disabled = true;
+
+                this.showLocationStatus('Getting your location...', 'info');
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const accuracy = position.coords.accuracy;
+                        
+                        // Show map if not already shown
+                        if (!this.mapEnabled) {
+                            this.toggleMap(true);
+                        }
+                        
+                        // Add marker at user's location
+                        this.addMarker([lat, lng], accuracy);
+                        
+                        this.showLocationStatus(`Location acquired (accuracy: ±${Math.round(accuracy)}m)`, 'success');
+                        this.isLocating = false;
+                        locateBtn.textContent = originalText;
+                        locateBtn.disabled = false;
+                    },
+                    (error) => {
+                        let message = 'Unable to get your location';
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                message = 'Location permission denied. Please enable location services.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                message = 'Location information unavailable.';
+                                break;
+                            case error.TIMEOUT:
+                                message = 'Location request timed out.';
+                                break;
+                        }
+                        
+                        this.showLocationStatus(message, 'error');
+                        this.isLocating = false;
+                        locateBtn.textContent = originalText;
+                        locateBtn.disabled = false;
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            },
+
+            // Handle photo upload with compression
             handlePhotoUpload(event) {
                 const file = event.target.files[0];
                 if (!file) return;
@@ -846,25 +1261,81 @@
                     return;
                 }
 
-                // Check file size (max 2MB)
-                if (file.size > 2 * 1024 * 1024) {
-                    this.showStatus('Image must be less than 2MB', 'error');
+                // Check file size (max 5MB before compression)
+                if (file.size > 5 * 1024 * 1024) {
+                    this.showStatus('Image must be less than 5MB', 'error');
                     return;
                 }
 
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    this.currentPhoto = {
-                        data: e.target.result,
-                        filename: file.name,
-                        type: file.type
-                    };
-                    
-                    const preview = document.getElementById('photo-preview');
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
+                    this.compressImage(e.target.result, (compressedData) => {
+                        this.currentPhoto = {
+                            data: compressedData,
+                            filename: `ECO_${Date.now()}.jpg`,
+                            type: 'image/jpeg',
+                            originalSize: file.size,
+                            compressedSize: Math.round(compressedData.length * 3/4) // Approximate base64 size
+                        };
+                        
+                        const preview = document.getElementById('photo-preview');
+                        preview.src = compressedData;
+                        preview.style.display = 'block';
+                        
+                        // Show photo info
+                        const photoInfo = document.getElementById('photo-info');
+                        const photoSize = document.getElementById('photo-size');
+                        const photoResolution = document.getElementById('photo-resolution');
+                        
+                        // Get image dimensions
+                        const img = new Image();
+                        img.onload = () => {
+                            photoSize.textContent = `Size: ${this.formatBytes(this.currentPhoto.compressedSize)}`;
+                            photoResolution.textContent = `Resolution: ${img.width}×${img.height}`;
+                            photoInfo.style.display = 'block';
+                        };
+                        img.src = compressedData;
+                    });
                 };
                 reader.readAsDataURL(file);
+            },
+
+            // Compress image function
+            compressImage(dataUrl, callback, maxWidth = 1920, maxHeight = 1080, quality = 0.7) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+
+                    // Calculate new dimensions while maintaining aspect ratio
+                    if (width > maxWidth || height > maxHeight) {
+                        const ratio = Math.min(maxWidth / width, maxHeight / height);
+                        width *= ratio;
+                        height *= ratio;
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    // Convert to JPEG with specified quality
+                    const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    callback(compressedDataUrl);
+                };
+                img.src = dataUrl;
+            },
+
+            // Format bytes to human readable size
+            formatBytes(bytes, decimals = 1) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const dm = decimals < 0 ? 0 : decimals;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
             },
 
             // Render logbook entries
@@ -884,17 +1355,38 @@
                     <div class="log-entry" data-id="${obs.id}">
                         <div class="log-header">
                             <div class="log-id">${obs.id}</div>
-                            <div class="log-date">${new Date(obs.timestamp).toLocaleDateString()}</div>
+                            <div class="log-date">${new Date(obs.timestamp).toLocaleString()}</div>
                         </div>
-                        <div class="log-species">${this.escapeHtml(obs.species)}</div>
+                        <div class="log-species">
+                            ${this.escapeHtml(obs.scientificName)}
+                            ${obs.commonName ? `(${this.escapeHtml(obs.commonName)})` : ''}
+                        </div>
                         <div class="log-location">${this.escapeHtml(obs.location.text)}</div>
                         <div class="log-details" id="details-${obs.id}">
                             <div style="margin: 0.5rem 0;">
-                                <strong>Habitat:</strong> ${this.capitalizeFirst(obs.habitat || 'Not specified')}
+                                <strong>Observation Type:</strong> ${this.formatObservationType(obs.observationType)}
                             </div>
+                            <div style="margin: 0.5rem 0;">
+                                <strong>Habitat:</strong> ${this.capitalizeFirst(obs.habitat)}
+                            </div>
+                            ${obs.characteristics ? `
+                                <div style="margin: 0.5rem 0;">
+                                    <strong>Characteristics:</strong> ${this.escapeHtml(obs.characteristics)}
+                                </div>
+                            ` : ''}
+                            ${obs.equipment && obs.equipment.length > 0 ? `
+                                <div style="margin: 0.5rem 0;">
+                                    <strong>Equipment:</strong> ${obs.equipment.map(eq => this.formatEquipment(eq)).join(', ')}
+                                </div>
+                            ` : ''}
                             ${obs.notes ? `
                                 <div style="margin: 0.5rem 0;">
                                     <strong>Notes:</strong> ${this.escapeHtml(obs.notes)}
+                                </div>
+                            ` : ''}
+                            ${obs.references ? `
+                                <div style="margin: 0.5rem 0;">
+                                    <strong>References:</strong> ${this.escapeHtml(obs.references)}
                                 </div>
                             ` : ''}
                             ${obs.photo ? `
@@ -912,10 +1404,18 @@
                 
                 container.innerHTML = entriesHtml;
                 
-                // Add event listeners to log entries
+                // Add event listeners
+                this.attachLogbookEventListeners();
+            },
+
+            // Attach event listeners to logbook entries
+            attachLogbookEventListeners() {
+                // Toggle details on entry click
                 document.querySelectorAll('.log-entry').forEach(entry => {
                     entry.addEventListener('click', (e) => {
-                        if (!e.target.classList.contains('edit-btn') && !e.target.classList.contains('delete-btn')) {
+                        if (!e.target.classList.contains('edit-btn') && 
+                            !e.target.classList.contains('delete-btn') &&
+                            !e.target.closest('.log-actions')) {
                             const id = entry.dataset.id;
                             const details = document.getElementById(`details-${id}`);
                             details.classList.toggle('show');
@@ -923,7 +1423,7 @@
                     });
                 });
                 
-                // Add event listeners to edit/delete buttons
+                // Edit buttons
                 document.querySelectorAll('.edit-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -931,6 +1431,7 @@
                     });
                 });
                 
+                // Delete buttons
                 document.querySelectorAll('.delete-btn').forEach(btn => {
                     btn.addEventListener('click', (e) => {
                         e.stopPropagation();
@@ -944,55 +1445,112 @@
                 const observation = this.observations.find(obs => obs.id === id);
                 if (!observation) return;
 
-                // Populate form with observation data
-                document.getElementById('species').value = observation.species;
+                // Parse date and time
+                const dateTime = new Date(observation.timestamp);
+                const dateStr = dateTime.toISOString().split('T')[0];
+                const timeStr = dateTime.toTimeString().slice(0, 5);
+
+                // Populate form
+                document.getElementById('observation-date').value = dateStr;
+                document.getElementById('observation-time').value = timeStr;
+                document.getElementById('scientific-name').value = observation.scientificName;
+                document.getElementById('common-name').value = observation.commonName;
                 document.getElementById('location').value = observation.location.text;
                 document.getElementById('habitat').value = observation.habitat;
+                document.getElementById('observation-type').value = observation.observationType;
+                document.getElementById('characteristics').value = observation.characteristics;
                 document.getElementById('notes').value = observation.notes;
-                
-                // Handle photo
+                document.getElementById('references').value = observation.references;
+
+                // Equipment checkboxes
+                document.querySelectorAll('input[name="equipment"]').forEach(cb => {
+                    cb.checked = false;
+                    if (observation.equipment) {
+                        const eqValue = cb.value;
+                        observation.equipment.forEach(eq => {
+                            if (eq.startsWith('other:') && eqValue === 'other-equipment') {
+                                cb.checked = true;
+                                document.getElementById('other-equipment').value = eq.substring(6);
+                                document.getElementById('other-equipment').style.display = 'block';
+                            } else if (eq === eqValue) {
+                                cb.checked = true;
+                            }
+                        });
+                    }
+                });
+
+                // Photo
                 if (observation.photo) {
                     this.currentPhoto = observation.photo;
                     const preview = document.getElementById('photo-preview');
                     preview.src = observation.photo.data;
                     preview.style.display = 'block';
+                    
+                    // Show photo info
+                    const photoInfo = document.getElementById('photo-info');
+                    const photoSize = document.getElementById('photo-size');
+                    photoSize.textContent = `Size: ${this.formatBytes(observation.photo.compressedSize || observation.photo.data.length * 3/4)}`;
+                    photoInfo.style.display = 'block';
                 }
 
                 // Change record button to update
                 const recordBtn = document.getElementById('record-btn');
                 recordBtn.textContent = '💾 Update Observation';
                 recordBtn.dataset.editingId = id;
-                
-                // Change button behavior
-                recordBtn.onclick = () => {
-                    this.handleUpdateObservation(id);
-                };
+                recordBtn.onclick = () => this.handleUpdateObservation(id);
                 
                 // Switch to record tab
                 this.switchTab('record');
-                document.getElementById('species').focus();
+                document.getElementById('scientific-name').focus();
             },
 
             // Handle updating an observation
             handleUpdateObservation(id) {
-                const species = document.getElementById('species').value.trim();
+                // Get all form values (same as recording)
+                const date = document.getElementById('observation-date').value;
+                const time = document.getElementById('observation-time').value;
+                const scientificName = document.getElementById('scientific-name').value.trim();
+                const commonName = document.getElementById('common-name').value.trim();
                 const location = document.getElementById('location').value.trim();
                 const habitat = document.getElementById('habitat').value;
+                const observationType = document.getElementById('observation-type').value;
+                const characteristics = document.getElementById('characteristics').value.trim();
                 const notes = document.getElementById('notes').value.trim();
+                const references = document.getElementById('references').value.trim();
 
-                if (!species) {
-                    this.showStatus('Please enter a species name', 'error');
+                // Get equipment used
+                const equipment = [];
+                document.querySelectorAll('input[name="equipment"]:checked').forEach(cb => {
+                    equipment.push(cb.value);
+                });
+                
+                // Add other equipment if specified
+                const otherEquipment = document.getElementById('other-equipment').value.trim();
+                if (otherEquipment && equipment.includes('other-equipment')) {
+                    equipment[equipment.indexOf('other-equipment')] = `other: ${otherEquipment}`;
+                }
+
+                // Validation
+                if (!date || !time || !scientificName || !location || !habitat || !observationType) {
+                    this.showStatus('Please fill in all required fields', 'error');
                     return;
                 }
 
                 const updatedData = {
-                    species,
+                    timestamp: new Date(date + 'T' + time).toISOString(),
+                    scientificName,
+                    commonName,
                     location: {
                         text: location,
-                        coordinates: this.observations.find(obs => obs.id === id)?.location.coordinates || null
+                        coordinates: this.observations.find(obs => obs.id === id)?.location.coordinates || null,
+                        accuracy: this.observations.find(obs => obs.id === id)?.location.accuracy || null
                     },
                     habitat,
+                    observationType,
+                    characteristics,
                     notes,
+                    equipment,
+                    references,
                     photo: this.currentPhoto
                 };
 
@@ -1001,10 +1559,6 @@
                     
                     // Reset form and button
                     this.resetForm();
-                    const recordBtn = document.getElementById('record-btn');
-                    recordBtn.textContent = '📝 Record Observation';
-                    recordBtn.onclick = () => this.handleRecordObservation();
-                    delete recordBtn.dataset.editingId;
                 }
             },
 
@@ -1028,16 +1582,27 @@
                 }
             },
 
-            // Export to CSV
+            // Export to CSV with all fields
             exportToCSV(observations) {
-                // Convert observations to CSV format
-                const headers = ['ID', 'Timestamp', 'Species', 'Location', 'Habitat', 'Notes', 'Has Photo'];
+                const headers = [
+                    'ID', 'Timestamp', 'Scientific Name', 'Common Name', 'Location',
+                    'Latitude', 'Longitude', 'Habitat', 'Observation Type',
+                    'Characteristics', 'Equipment', 'References', 'Notes', 'Has Photo'
+                ];
+                
                 const rows = observations.map(obs => [
                     obs.id,
                     new Date(obs.timestamp).toLocaleString(),
-                    `"${obs.species.replace(/"/g, '""')}"`,
+                    `"${obs.scientificName.replace(/"/g, '""')}"`,
+                    `"${obs.commonName.replace(/"/g, '""')}"`,
                     `"${obs.location.text.replace(/"/g, '""')}"`,
+                    obs.location.coordinates?.lat || '',
+                    obs.location.coordinates?.lng || '',
                     obs.habitat,
+                    obs.observationType,
+                    `"${(obs.characteristics || '').replace(/"/g, '""')}"`,
+                    `"${(obs.equipment || []).join('; ').replace(/"/g, '""')}"`,
+                    `"${(obs.references || '').replace(/"/g, '""')}"`,
                     `"${(obs.notes || '').replace(/"/g, '""')}"`,
                     obs.photo ? 'Yes' : 'No'
                 ]);
@@ -1047,11 +1612,10 @@
                     ...rows.map(row => row.join(','))
                 ].join('\n');
                 
-                // Create download link
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 
-                this.showExportDownload(url, 'EcoLens_Observations.csv');
+                this.showExportDownload(url, `EcoLens_Export_${new Date().toISOString().slice(0,10)}.csv`);
                 this.showStatus(`Exported ${observations.length} observations to CSV`, 'success', 'export');
             },
 
@@ -1062,13 +1626,15 @@
                 
                 let y = 20;
                 const pageHeight = doc.internal.pageSize.height;
+                const margin = 20;
+                const maxWidth = 170;
                 
                 // Title
                 doc.setFontSize(16);
-                doc.text('EcoLens Field Observations', 20, y);
+                doc.text('EcoLens Field Observations Report', margin, y);
                 y += 10;
                 
-                // Date range info
+                // Report info
                 doc.setFontSize(10);
                 const dateFrom = document.getElementById('date-from').value;
                 const dateTo = document.getElementById('date-to').value;
@@ -1076,48 +1642,102 @@
                 if (dateFrom || dateTo) {
                     dateRangeText = `Observations from ${dateFrom || 'start'} to ${dateTo || 'end'}`;
                 }
-                doc.text(dateRangeText, 20, y);
-                doc.text(`Generated: ${new Date().toLocaleString()}`, 20, y + 5);
-                y += 15;
+                doc.text(dateRangeText, margin, y);
+                doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y + 5);
+                doc.text(`Total Observations: ${observations.length}`, margin, y + 10);
+                y += 20;
                 
                 // Observations
                 doc.setFontSize(12);
                 
                 observations.forEach((obs, index) => {
                     // Check if we need a new page
-                    if (y > pageHeight - 40) {
+                    if (y > pageHeight - 60) {
                         doc.addPage();
                         y = 20;
                     }
                     
+                    // Observation header
                     doc.setFont('helvetica', 'bold');
-                    doc.text(`Observation: ${obs.id}`, 20, y);
-                    y += 7;
+                    const title = `Observation: ${obs.id}`;
+                    doc.text(title, margin, y);
+                    y += 8;
                     
                     doc.setFont('helvetica', 'normal');
-                    const lines = [
-                        `Date: ${new Date(obs.timestamp).toLocaleString()}`,
-                        `Species: ${obs.species}`,
+                    doc.setFontSize(10);
+                    
+                    // Observation details
+                    const details = [
+                        `Date/Time: ${new Date(obs.timestamp).toLocaleString()}`,
+                        `Scientific Name: ${obs.scientificName}`,
+                        `Common Name: ${obs.commonName || 'Not specified'}`,
                         `Location: ${obs.location.text}`,
-                        `Habitat: ${this.capitalizeFirst(obs.habitat || 'Not specified')}`,
-                        `Notes: ${obs.notes || 'None'}`,
-                        `Photo: ${obs.photo ? 'Attached' : 'None'}`
+                        `Coordinates: ${obs.location.coordinates ? 
+                            `${obs.location.coordinates.lat.toFixed(5)}, ${obs.location.coordinates.lng.toFixed(5)}` : 
+                            'Not recorded'}`,
+                        `Habitat: ${this.capitalizeFirst(obs.habitat)}`,
+                        `Observation Type: ${this.formatObservationType(obs.observationType)}`,
+                        `Equipment: ${(obs.equipment || []).map(eq => this.formatEquipment(eq)).join(', ') || 'None'}`,
+                        `References: ${obs.references || 'None'}`
                     ];
                     
-                    lines.forEach(line => {
-                        doc.text(line, 20, y);
+                    details.forEach(line => {
+                        if (y > pageHeight - 20) {
+                            doc.addPage();
+                            y = 20;
+                        }
+                        doc.text(line, margin, y);
                         y += 6;
                     });
                     
+                    // Characteristics (wrapped text)
+                    if (obs.characteristics) {
+                        y += 2;
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('Characteristics:', margin, y);
+                        y += 6;
+                        doc.setFont('helvetica', 'normal');
+                        
+                        const lines = doc.splitTextToSize(obs.characteristics, maxWidth);
+                        lines.forEach(line => {
+                            if (y > pageHeight - 20) {
+                                doc.addPage();
+                                y = 20;
+                            }
+                            doc.text(line, margin, y);
+                            y += 6;
+                        });
+                    }
+                    
+                    // Notes (wrapped text)
+                    if (obs.notes) {
+                        y += 2;
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('Notes:', margin, y);
+                        y += 6;
+                        doc.setFont('helvetica', 'normal');
+                        
+                        const lines = doc.splitTextToSize(obs.notes, maxWidth);
+                        lines.forEach(line => {
+                            if (y > pageHeight - 20) {
+                                doc.addPage();
+                                y = 20;
+                            }
+                            doc.text(line, margin, y);
+                            y += 6;
+                        });
+                    }
+                    
                     y += 10; // Space between observations
                     
-                    // Add a separator line
-                    doc.line(20, y, 190, y);
-                    y += 15;
+                    // Add separator if not last
+                    if (index < observations.length - 1 && y < pageHeight - 10) {
+                        doc.line(margin, y, margin + maxWidth, y);
+                        y += 15;
+                    }
                 });
                 
-                // Save PDF
-                const filename = `EcoLens_Observations_${new Date().toISOString().slice(0,10)}.pdf`;
+                const filename = `EcoLens_Report_${new Date().toISOString().slice(0,10)}.pdf`;
                 const pdfUrl = doc.output('bloburl');
                 
                 this.showExportDownload(pdfUrl, filename);
@@ -1148,6 +1768,20 @@
                 }
             },
 
+            // Show location status
+            showLocationStatus(message, type = 'info') {
+                const statusEl = document.getElementById('location-status');
+                statusEl.textContent = message;
+                statusEl.className = `status-message status-${type}`;
+                statusEl.style.display = 'block';
+                
+                if (type === 'error') {
+                    setTimeout(() => {
+                        statusEl.style.display = 'none';
+                    }, 5000);
+                }
+            },
+
             // Update date inputs with current date
             updateDateInputs() {
                 const today = new Date().toISOString().split('T')[0];
@@ -1155,6 +1789,43 @@
                 document.getElementById('date-to').value = today;
                 document.getElementById('date-from').max = today;
                 document.getElementById('date-to').max = today;
+            },
+
+            // Utility: Format observation type for display
+            formatObservationType(type) {
+                const typeMap = {
+                    'direct': 'Direct sighting',
+                    'scat': 'Scat/droppings',
+                    'track': 'Track/footprint',
+                    'call': 'Call/sound',
+                    'nest': 'Nest/den',
+                    'roadkill': 'Roadkill',
+                    'feather': 'Feather',
+                    'bone': 'Bone/skull',
+                    'other': 'Other evidence'
+                };
+                return typeMap[type] || this.capitalizeFirst(type);
+            },
+
+            // Utility: Format equipment for display
+            formatEquipment(equipment) {
+                const eqMap = {
+                    'binoculars': 'Binoculars',
+                    'camera': 'Camera',
+                    'hand-lens': 'Hand lens',
+                    'gps': 'GPS',
+                    'microscope': 'Microscope',
+                    'hair-tube': 'Hair tube',
+                    'pitfall-trap': 'Pitfall trap',
+                    'camera-trap': 'Camera trap',
+                    'other-equipment': 'Other'
+                };
+                
+                if (equipment.startsWith('other: ')) {
+                    return equipment.substring(7);
+                }
+                
+                return eqMap[equipment] || this.capitalizeFirst(equipment);
             },
 
             // Utility: Escape HTML to prevent XSS
