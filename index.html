@@ -553,6 +553,13 @@
                     </div>
                 </div>
 
+                <!-- Observer Name -->
+                <div class="form-group">
+                    <label class="form-label required" for="observer-name">Observer Name</label>
+                    <input type="text" id="observer-name" class="form-input" 
+                           placeholder="Enter observer's name" required>
+                </div>
+
                 <!-- Species Information -->
                 <div class="form-row">
                     <div class="form-col">
@@ -835,6 +842,7 @@
             return {
                 id: this.generateObservationId(),
                 timestamp: dateTime.toISOString(),
+                observerName: data.observerName.trim(),
                 scientificName: data.scientificName.trim(),
                 commonName: data.commonName?.trim() || '',
                 location: {
@@ -1005,6 +1013,7 @@
             // Get all form values
             const date = document.getElementById('observation-date').value;
             const time = document.getElementById('observation-time').value;
+            const observerName = document.getElementById('observer-name').value.trim();
             const scientificName = document.getElementById('scientific-name').value.trim();
             const commonName = document.getElementById('common-name').value.trim();
             const location = document.getElementById('location').value.trim();
@@ -1029,6 +1038,12 @@
             // Validation
             if (!date || !time) {
                 this.showStatus('Please enter observation date and time', 'error');
+                return;
+            }
+
+            if (!observerName) {
+                this.showStatus('Please enter observer name', 'error');
+                document.getElementById('observer-name').focus();
                 return;
             }
 
@@ -1066,6 +1081,7 @@
             const observation = this.createObservation({
                 date,
                 time,
+                observerName,
                 scientificName,
                 commonName,
                 location: location || 'Map location selected',
@@ -1093,6 +1109,7 @@
         resetForm() {
             // Reset all form fields
             this.setCurrentDateTime();
+            document.getElementById('observer-name').value = '';
             document.getElementById('scientific-name').value = '';
             document.getElementById('common-name').value = '';
             document.getElementById('location').value = '';
@@ -1387,6 +1404,9 @@
                     <div class="log-location">${this.escapeHtml(obs.location.text)}</div>
                     <div class="log-details" id="details-${obs.id}">
                         <div style="margin: 0.5rem 0;">
+                            <strong>Observer:</strong> ${this.escapeHtml(obs.observerName)}
+                        </div>
+                        <div style="margin: 0.5rem 0;">
                             <strong>Observation Type:</strong> ${this.formatObservationType(obs.observationType)}
                         </div>
                         <div style="margin: 0.5rem 0;">
@@ -1476,6 +1496,7 @@
             // Populate form
             document.getElementById('observation-date').value = dateStr;
             document.getElementById('observation-time').value = timeStr;
+            document.getElementById('observer-name').value = observation.observerName;
             document.getElementById('scientific-name').value = observation.scientificName;
             document.getElementById('common-name').value = observation.commonName;
             document.getElementById('location').value = observation.location.text;
@@ -1524,7 +1545,7 @@
             
             // Switch to record tab
             this.switchTab('record');
-            document.getElementById('scientific-name').focus();
+            document.getElementById('observer-name').focus();
         },
 
         // Handle updating an observation
@@ -1532,6 +1553,7 @@
             // Get all form values (same as recording)
             const date = document.getElementById('observation-date').value;
             const time = document.getElementById('observation-time').value;
+            const observerName = document.getElementById('observer-name').value.trim();
             const scientificName = document.getElementById('scientific-name').value.trim();
             const commonName = document.getElementById('common-name').value.trim();
             const location = document.getElementById('location').value.trim();
@@ -1554,13 +1576,14 @@
             }
 
             // Validation
-            if (!date || !time || !scientificName || !location || !habitat || !observationType) {
+            if (!date || !time || !observerName || !scientificName || !location || !habitat || !observationType) {
                 this.showStatus('Please fill in all required fields', 'error');
                 return;
             }
 
             const updatedData = {
                 timestamp: new Date(date + 'T' + time).toISOString(),
+                observerName,
                 scientificName,
                 commonName,
                 location: {
@@ -1608,7 +1631,7 @@
         // Export to CSV with all fields
         exportToCSV(observations) {
             const headers = [
-                'ID', 'Timestamp', 'Scientific Name', 'Common Name', 'Location',
+                'ID', 'Timestamp', 'Observer Name', 'Scientific Name', 'Common Name', 'Location',
                 'Latitude', 'Longitude', 'Habitat', 'Observation Type',
                 'Characteristics', 'Equipment', 'References', 'Notes', 'Has Photo'
             ];
@@ -1616,6 +1639,7 @@
             const rows = observations.map(obs => [
                 obs.id,
                 new Date(obs.timestamp).toLocaleString(),
+                `"${obs.observerName.replace(/"/g, '""')}"`,
                 `"${obs.scientificName.replace(/"/g, '""')}"`,
                 `"${obs.commonName.replace(/"/g, '""')}"`,
                 `"${obs.location.text.replace(/"/g, '""')}"`,
@@ -1885,6 +1909,7 @@
                         // Add key-value pairs in column 1
                         const col1Items = [
                             { key: 'Date/Time', value: new Date(obs.timestamp).toLocaleString() },
+                            { key: 'Observer', value: obs.observerName },
                             { key: 'Scientific Name', value: obs.scientificName },
                             { key: 'Common Name', value: obs.commonName || 'Not specified' },
                             { key: 'Habitat', value: this.capitalizeFirst(obs.habitat) },
