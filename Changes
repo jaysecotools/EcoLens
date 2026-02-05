@@ -393,6 +393,145 @@
             flex: 1;
         }
 
+        /* Import Panel */
+        .import-options {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .import-instructions {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 4px solid #3498db;
+        }
+
+        .import-instructions h3 {
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .import-instructions ul {
+            margin-left: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .import-instructions li {
+            margin-bottom: 0.25rem;
+        }
+
+        .import-instructions code {
+            background: #e9ecef;
+            padding: 0.125rem 0.25rem;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        /* Import File Upload */
+        .file-upload-area {
+            border: 2px dashed #3498db;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.2s;
+            margin: 1rem 0;
+            cursor: pointer;
+        }
+
+        .file-upload-area:hover {
+            background: #e8f4fc;
+            border-color: #2980b9;
+        }
+
+        .file-upload-area.drag-over {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            border-style: solid;
+        }
+
+        .file-upload-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+
+        .file-upload-text {
+            margin-bottom: 0.5rem;
+            color: #2c3e50;
+        }
+
+        .file-upload-hint {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        /* Import Options */
+        .import-option-group {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .import-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .import-option input[type="radio"],
+        .import-option input[type="checkbox"] {
+            width: auto;
+        }
+
+        /* Import Preview */
+        .import-preview {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .preview-table th {
+            background: #f8f9fa;
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+        }
+
+        .preview-table td {
+            padding: 0.5rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .preview-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .preview-table tr:hover {
+            background: #e9ecef;
+        }
+
         /* Status Messages */
         .status-message {
             padding: 1rem;
@@ -532,6 +671,7 @@
             <button class="tab-btn active" data-tab="record">Record</button>
             <button class="tab-btn" data-tab="logbook">Logbook</button>
             <button class="tab-btn" data-tab="export">Export</button>
+            <button class="tab-btn" data-tab="import">Import</button>
         </div>
     </div>
 
@@ -778,6 +918,84 @@
                 <a id="download-link" class="btn btn-primary" download>⬇️ Download Export</a>
             </div>
         </div>
+
+        <!-- Import Panel -->
+        <div id="import-panel" class="tab-panel">
+            <div class="form-section import-options">
+                <h2 class="form-title">Import Observations</h2>
+                
+                <div class="import-instructions">
+                    <h3>📋 CSV Import Instructions</h3>
+                    <p>Import observations from a CSV file. The file should follow this format:</p>
+                    <ul>
+                        <li>Use the CSV files exported from this app for best compatibility</li>
+                        <li>Required columns: <code>ID</code>, <code>Timestamp</code>, <code>Observer Name</code>, <code>Scientific Name</code>, <code>Location</code>, <code>Habitat</code>, <code>Observation Type</code></li>
+                        <li>Optional columns: <code>Common Name</code>, <code>Characteristics</code>, <code>Equipment</code>, <code>References</code>, <code>Notes</code>, <code>Has Photo</code></li>
+                        <li>Photos cannot be imported from CSV</li>
+                        <li>Dates should be in format: <code>MM/DD/YYYY HH:MM:SS</code> or <code>YYYY-MM-DDTHH:MM:SS</code></li>
+                    </ul>
+                    <p><strong>Note:</strong> Existing observations with the same ID will be skipped unless you choose to overwrite them.</p>
+                </div>
+
+                <!-- File Upload Area -->
+                <div class="file-upload-area" id="file-upload-area">
+                    <div class="file-upload-icon">📁</div>
+                    <div class="file-upload-text">Drop CSV file here or click to browse</div>
+                    <div class="file-upload-hint">Supports .csv files only</div>
+                    <input type="file" id="file-input" accept=".csv">
+                </div>
+
+                <!-- Import Options -->
+                <div class="import-option-group">
+                    <label class="form-label">Import Options</label>
+                    
+                    <div class="import-option">
+                        <input type="radio" id="import-append" name="import-mode" value="append" checked>
+                        <label for="import-append">Append new observations only (skip duplicates)</label>
+                    </div>
+                    
+                    <div class="import-option">
+                        <input type="radio" id="import-overwrite" name="import-mode" value="overwrite">
+                        <label for="import-overwrite">Overwrite duplicates with imported data</label>
+                    </div>
+                    
+                    <div class="import-option">
+                        <input type="checkbox" id="import-validate" checked>
+                        <label for="import-validate">Validate data before importing</label>
+                    </div>
+                    
+                    <div class="import-option">
+                        <input type="checkbox" id="import-generate-ids" checked>
+                        <label for="import-generate-ids">Generate new IDs for imported observations (if missing)</label>
+                    </div>
+                </div>
+
+                <!-- Import Preview -->
+                <div class="import-preview" id="import-preview">
+                    <table class="preview-table" id="preview-table">
+                        <thead>
+                            <tr id="preview-headers"></tr>
+                        </thead>
+                        <tbody id="preview-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Import Summary -->
+                <div id="import-summary" class="status-message" style="display: none;"></div>
+
+                <!-- Import Button -->
+                <button id="process-import" class="btn btn-secondary btn-block" disabled>
+                    📥 Process Import
+                </button>
+
+                <!-- Clear Preview Button -->
+                <button id="clear-preview" class="btn btn-outline btn-block" style="margin-top: 0.5rem; display: none;">
+                    🗑️ Clear Preview
+                </button>
+            </div>
+
+            <div id="import-status" class="status-message" style="display: none;"></div>
+        </div>
     </div>
 
 <script>
@@ -808,6 +1026,7 @@
         mapEnabled: false,
         isLocating: false,
         isGeneratingPDF: false,
+        importData: null, // Store imported data
 
         // Initialize the application
         init() {
@@ -980,6 +1199,9 @@
                 this.handleExport();
             });
 
+            // Import functionality
+            this.setupImportListeners();
+
             // Form inputs - clear status on change
             document.querySelectorAll('#record-panel input, #record-panel textarea, #record-panel select')
                 .forEach(input => {
@@ -987,6 +1209,448 @@
                         document.getElementById('record-status').style.display = 'none';
                     });
                 });
+        },
+
+        // Setup import event listeners
+        setupImportListeners() {
+            const fileInput = document.getElementById('file-input');
+            const fileUploadArea = document.getElementById('file-upload-area');
+            const processImportBtn = document.getElementById('process-import');
+            const clearPreviewBtn = document.getElementById('clear-preview');
+
+            // Click to browse
+            fileUploadArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+
+            // Drag and drop events
+            fileUploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.add('drag-over');
+            });
+
+            fileUploadArea.addEventListener('dragleave', () => {
+                fileUploadArea.classList.remove('drag-over');
+            });
+
+            fileUploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUploadArea.classList.remove('drag-over');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) {
+                        this.handleFileSelection(file);
+                    } else {
+                        this.showStatus('Please select a CSV file', 'error', 'import');
+                    }
+                }
+            });
+
+            // File input change
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    this.handleFileSelection(e.target.files[0]);
+                }
+            });
+
+            // Process import
+            processImportBtn.addEventListener('click', () => {
+                this.processImport();
+            });
+
+            // Clear preview
+            clearPreviewBtn.addEventListener('click', () => {
+                this.clearImportPreview();
+            });
+        },
+
+        // Handle file selection for import
+        handleFileSelection(file) {
+            if (!file || !(file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv'))) {
+                this.showStatus('Please select a CSV file', 'error', 'import');
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    this.parseCSV(e.target.result);
+                } catch (error) {
+                    console.error('Error parsing CSV:', error);
+                    this.showStatus(`Error parsing CSV: ${error.message}`, 'error', 'import');
+                }
+            };
+            reader.onerror = () => {
+                this.showStatus('Error reading file', 'error', 'import');
+            };
+            reader.readAsText(file);
+        },
+
+        // Parse CSV data
+        parseCSV(csvText) {
+            // Parse CSV with proper handling of quoted fields
+            const rows = this.parseCSVRow(csvText);
+            
+            if (rows.length < 2) {
+                throw new Error('CSV file must contain at least a header row and one data row');
+            }
+
+            const headers = rows[0].map(h => h.trim());
+            const dataRows = rows.slice(1);
+
+            // Check for required headers
+            const requiredHeaders = ['Observer Name', 'Scientific Name', 'Location', 'Habitat', 'Observation Type'];
+            const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+            
+            if (missingHeaders.length > 0) {
+                throw new Error(`Missing required columns: ${missingHeaders.join(', ')}`);
+            }
+
+            // Validate and parse each row
+            const parsedData = [];
+            const validationErrors = [];
+
+            dataRows.forEach((row, index) => {
+                const rowNumber = index + 2; // +2 for header row and 1-based indexing
+                const rowData = {};
+                
+                // Map headers to row values
+                headers.forEach((header, colIndex) => {
+                    rowData[header] = row[colIndex] || '';
+                });
+
+                // Validate required fields
+                const missingFields = requiredHeaders.filter(h => !rowData[h] || rowData[h].trim() === '');
+                if (missingFields.length > 0) {
+                    validationErrors.push(`Row ${rowNumber}: Missing required fields: ${missingFields.join(', ')}`);
+                    return;
+                }
+
+                // Parse and validate habitat
+                const habitat = rowData['Habitat'].toLowerCase();
+                if (!HABITAT_TYPES.includes(habitat) && habitat !== 'other') {
+                    validationErrors.push(`Row ${rowNumber}: Invalid habitat type: ${rowData['Habitat']}`);
+                    return;
+                }
+
+                // Parse and validate observation type
+                const obsType = rowData['Observation Type'].toLowerCase();
+                if (!OBSERVATION_TYPES.includes(obsType) && obsType !== 'other') {
+                    validationErrors.push(`Row ${rowNumber}: Invalid observation type: ${rowData['Observation Type']}`);
+                    return;
+                }
+
+                // Parse timestamp
+                let timestamp;
+                if (rowData['Timestamp']) {
+                    timestamp = new Date(rowData['Timestamp']);
+                    if (isNaN(timestamp.getTime())) {
+                        // Try parsing as locale string
+                        timestamp = new Date(rowData['Timestamp'].replace(/(\d+)\/(\d+)\/(\d+)/, '$2/$1/$3'));
+                        if (isNaN(timestamp.getTime())) {
+                            validationErrors.push(`Row ${rowNumber}: Invalid timestamp format: ${rowData['Timestamp']}`);
+                            return;
+                        }
+                    }
+                } else {
+                    // Use current date/time if not provided
+                    timestamp = new Date();
+                }
+
+                // Parse equipment
+                let equipment = [];
+                if (rowData['Equipment']) {
+                    equipment = rowData['Equipment'].split(';').map(e => e.trim()).filter(e => e);
+                }
+
+                // Parse coordinates if available
+                let coordinates = null;
+                if (rowData['Latitude'] && rowData['Longitude']) {
+                    const lat = parseFloat(rowData['Latitude']);
+                    const lng = parseFloat(rowData['Longitude']);
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        coordinates = { lat, lng };
+                    }
+                }
+
+                // Create observation object
+                const observation = {
+                    id: rowData['ID'] || this.generateObservationId(),
+                    timestamp: timestamp.toISOString(),
+                    observerName: rowData['Observer Name'].trim(),
+                    scientificName: rowData['Scientific Name'].trim(),
+                    commonName: rowData['Common Name']?.trim() || '',
+                    location: {
+                        text: rowData['Location'].trim(),
+                        coordinates: coordinates,
+                        accuracy: rowData['Accuracy'] ? parseFloat(rowData['Accuracy']) : null
+                    },
+                    habitat: habitat,
+                    observationType: obsType,
+                    characteristics: rowData['Characteristics']?.trim() || '',
+                    notes: rowData['Notes']?.trim() || '',
+                    equipment: equipment,
+                    references: rowData['References']?.trim() || '',
+                    photo: null, // Photos cannot be imported from CSV
+                    metadata: {
+                        deviceInfo: navigator.userAgent,
+                        appVersion: '1.0',
+                        lastModified: new Date().toISOString(),
+                        imported: true,
+                        importDate: new Date().toISOString()
+                    }
+                };
+
+                parsedData.push(observation);
+            });
+
+            // Show validation errors if any
+            if (validationErrors.length > 0) {
+                const validateCheckbox = document.getElementById('import-validate');
+                if (validateCheckbox.checked) {
+                    this.showStatus(
+                        `Found ${validationErrors.length} validation error(s). Check the preview.`,
+                        'warning',
+                        'import'
+                    );
+                }
+            }
+
+            // Store parsed data and show preview
+            this.importData = {
+                rawRows: dataRows,
+                headers: headers,
+                parsedData: parsedData,
+                validationErrors: validationErrors
+            };
+
+            this.showImportPreview();
+        },
+
+        // Parse CSV row with proper quote handling
+        parseCSVRow(csv) {
+            const rows = [];
+            let currentRow = [];
+            let currentField = '';
+            let insideQuotes = false;
+            
+            for (let i = 0; i < csv.length; i++) {
+                const char = csv[i];
+                const nextChar = csv[i + 1];
+                
+                if (char === '"') {
+                    if (insideQuotes && nextChar === '"') {
+                        // Escaped quote
+                        currentField += '"';
+                        i++; // Skip next char
+                    } else {
+                        insideQuotes = !insideQuotes;
+                    }
+                } else if (char === ',' && !insideQuotes) {
+                    currentRow.push(currentField);
+                    currentField = '';
+                } else if (char === '\n' && !insideQuotes) {
+                    currentRow.push(currentField);
+                    rows.push(currentRow);
+                    currentRow = [];
+                    currentField = '';
+                    
+                    // Handle Windows line endings
+                    if (nextChar === '\r') i++;
+                } else if (char === '\r' && !insideQuotes) {
+                    // Skip carriage returns
+                    continue;
+                } else {
+                    currentField += char;
+                }
+            }
+            
+            // Add last field and row
+            if (currentField !== '' || currentRow.length > 0) {
+                currentRow.push(currentField);
+                rows.push(currentRow);
+            }
+            
+            return rows;
+        },
+
+        // Show import preview
+        showImportPreview() {
+            const previewDiv = document.getElementById('import-preview');
+            const previewTable = document.getElementById('preview-table');
+            const previewHeaders = document.getElementById('preview-headers');
+            const previewBody = document.getElementById('preview-body');
+            const processBtn = document.getElementById('process-import');
+            const clearBtn = document.getElementById('clear-preview');
+            const summaryDiv = document.getElementById('import-summary');
+
+            // Clear previous content
+            previewHeaders.innerHTML = '';
+            previewBody.innerHTML = '';
+            summaryDiv.innerHTML = '';
+
+            // Add headers
+            this.importData.headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                previewHeaders.appendChild(th);
+            });
+
+            // Add data rows (limit to 10 for preview)
+            const displayRows = Math.min(this.importData.rawRows.length, 10);
+            for (let i = 0; i < displayRows; i++) {
+                const tr = document.createElement('tr');
+                
+                this.importData.rawRows[i].forEach(cell => {
+                    const td = document.createElement('td');
+                    td.textContent = cell || '';
+                    tr.appendChild(td);
+                });
+                
+                previewBody.appendChild(tr);
+            }
+
+            // Show summary
+            const totalRows = this.importData.rawRows.length;
+            const validRows = this.importData.parsedData.length;
+            const errorRows = this.importData.validationErrors.length;
+            const duplicateRows = this.checkForDuplicates();
+
+            let summaryHtml = `
+                <div style="text-align: left;">
+                    <h4 style="margin-bottom: 0.5rem;">Import Summary</h4>
+                    <p><strong>Total rows in file:</strong> ${totalRows}</p>
+                    <p><strong>Valid rows:</strong> ${validRows}</p>
+                    <p><strong>Rows with errors:</strong> ${errorRows}</p>
+                    <p><strong>Duplicate observations:</strong> ${duplicateRows}</p>
+            `;
+
+            if (this.importData.validationErrors.length > 0) {
+                summaryHtml += `<p style="color: #e74c3c;"><strong>Validation errors found.</strong> Rows with errors will be skipped.</p>`;
+            }
+
+            if (duplicateRows > 0) {
+                const importMode = document.querySelector('input[name="import-mode"]:checked').value;
+                summaryHtml += `<p><strong>Duplicate handling:</strong> ${importMode === 'append' ? 'Skip duplicates' : 'Overwrite duplicates'}</p>`;
+            }
+
+            summaryHtml += `</div>`;
+
+            summaryDiv.innerHTML = summaryHtml;
+            summaryDiv.className = 'status-message status-info';
+            summaryDiv.style.display = 'block';
+
+            // Show preview and enable buttons
+            previewDiv.style.display = 'block';
+            processBtn.disabled = false;
+            clearBtn.style.display = 'block';
+
+            // Scroll to preview
+            previewDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        },
+
+        // Check for duplicate observations
+        checkForDuplicates() {
+            if (!this.importData) return 0;
+            
+            const existingIds = new Set(this.observations.map(obs => obs.id));
+            return this.importData.parsedData.filter(obs => existingIds.has(obs.id)).length;
+        },
+
+        // Process the import
+        processImport() {
+            if (!this.importData || this.importData.parsedData.length === 0) {
+                this.showStatus('No valid data to import', 'error', 'import');
+                return;
+            }
+
+            const importMode = document.querySelector('input[name="import-mode"]:checked').value;
+            const generateIds = document.getElementById('import-generate-ids').checked;
+            
+            let importedCount = 0;
+            let skippedCount = 0;
+            let overwrittenCount = 0;
+            let errorCount = 0;
+
+            // Show processing status
+            const processBtn = document.getElementById('process-import');
+            const originalText = processBtn.textContent;
+            processBtn.innerHTML = '<span class="loading"></span> Importing...';
+            processBtn.disabled = true;
+
+            // Process each observation
+            this.importData.parsedData.forEach(observation => {
+                try {
+                    // Generate new ID if requested and no ID provided
+                    if (generateIds && (!observation.id || observation.id === '')) {
+                        observation.id = this.generateObservationId();
+                    }
+
+                    // Check if observation already exists
+                    const existingIndex = this.observations.findIndex(obs => obs.id === observation.id);
+                    
+                    if (existingIndex !== -1) {
+                        // Duplicate found
+                        if (importMode === 'overwrite') {
+                            // Overwrite existing observation
+                            this.observations[existingIndex] = observation;
+                            overwrittenCount++;
+                            importedCount++;
+                        } else {
+                            // Skip duplicate
+                            skippedCount++;
+                        }
+                    } else {
+                        // New observation
+                        this.observations.unshift(observation);
+                        importedCount++;
+                    }
+                } catch (error) {
+                    console.error('Error importing observation:', error);
+                    errorCount++;
+                }
+            });
+
+            // Save to localStorage
+            localStorage.setItem('ecolens_observations', JSON.stringify(this.observations));
+
+            // Update UI
+            this.renderLogbook();
+
+            // Show results
+            let resultMessage = `Import complete! `;
+            resultMessage += `Imported: ${importedCount}, `;
+            resultMessage += `Skipped: ${skippedCount}, `;
+            resultMessage += `Overwritten: ${overwrittenCount}`;
+            
+            if (errorCount > 0) {
+                resultMessage += `, Errors: ${errorCount}`;
+            }
+
+            this.showStatus(resultMessage, 'success', 'import');
+
+            // Reset button
+            processBtn.textContent = originalText;
+            processBtn.disabled = false;
+
+            // Clear preview after successful import
+            setTimeout(() => {
+                this.clearImportPreview();
+                this.switchTab('logbook');
+            }, 3000);
+        },
+
+        // Clear import preview
+        clearImportPreview() {
+            document.getElementById('import-preview').style.display = 'none';
+            document.getElementById('preview-headers').innerHTML = '';
+            document.getElementById('preview-body').innerHTML = '';
+            document.getElementById('import-summary').style.display = 'none';
+            document.getElementById('process-import').disabled = true;
+            document.getElementById('clear-preview').style.display = 'none';
+            document.getElementById('file-input').value = '';
+            this.importData = null;
         },
 
         // Switch between tabs
@@ -1005,6 +1669,11 @@
             if (tabName !== 'export') {
                 document.getElementById('export-download').style.display = 'none';
                 document.getElementById('pdf-progress').style.display = 'none';
+            }
+
+            // Clear import preview when switching away from import tab
+            if (tabName !== 'import') {
+                this.clearImportPreview();
             }
         },
 
