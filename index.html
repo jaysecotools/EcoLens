@@ -242,6 +242,12 @@
             width: 100%;
         }
 
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
         /* Photo Upload */
         .photo-container {
             margin-top: 1rem;
@@ -393,6 +399,42 @@
             flex: 1;
         }
 
+        /* Import Section */
+        .import-section {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border: 2px dashed #3498db;
+        }
+
+        .import-options {
+            margin-top: 1rem;
+        }
+
+        .import-note {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
+
+        /* Import Mode Selection */
+        .import-mode {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .import-mode-option {
+            flex: 1;
+            min-width: 200px;
+        }
+
         /* Status Messages */
         .status-message {
             padding: 1rem;
@@ -506,6 +548,18 @@
             
             .btn {
                 padding: 0.625rem 1rem;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+            
+            .import-mode {
+                flex-direction: column;
+            }
+            
+            .import-mode-option {
+                min-width: 100%;
             }
         }
 
@@ -723,6 +777,14 @@
         <div id="logbook-panel" class="tab-panel">
             <div class="form-section">
                 <h2 class="form-title">Observation Logbook</h2>
+                <div class="btn-group">
+                    <button id="clear-logbook" class="btn btn-danger">
+                        🗑️ Clear All Entries
+                    </button>
+                    <button id="import-logbook" class="btn btn-outline">
+                        📥 Import CSV
+                    </button>
+                </div>
                 <div class="logbook-entries" id="logbook-entries">
                     <!-- Log entries will be inserted here -->
                 </div>
@@ -734,6 +796,35 @@
 
         <!-- Export Panel -->
         <div id="export-panel" class="tab-panel">
+            <!-- Import Section -->
+            <div class="form-section import-section">
+                <h2 class="form-title">Import Observations</h2>
+                <div class="form-group">
+                    <label class="form-label" for="csv-import">Import CSV File</label>
+                    <input type="file" id="csv-import" accept=".csv" class="form-input">
+                    <div class="import-mode">
+                        <div class="import-mode-option">
+                            <label class="form-label">Import Mode</label>
+                            <select id="import-mode" class="form-select">
+                                <option value="append">Append to existing data</option>
+                                <option value="replace">Replace existing data</option>
+                                <option value="merge">Merge and update existing</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="import-note">
+                        <strong>Note:</strong> Import CSV files exported from EcoLens. The file must include headers: 
+                        ID, Timestamp, Observer Name, Scientific Name, Common Name, Location, Latitude, Longitude, 
+                        Habitat, Observation Type, Characteristics, Equipment, References, Notes, Has Photo
+                    </div>
+                </div>
+                <button id="process-import" class="btn btn-primary btn-block">
+                    📥 Process Import
+                </button>
+                <div id="import-status" class="status-message" style="display: none; margin-top: 1rem;"></div>
+            </div>
+
+            <!-- Export Section -->
             <div class="form-section export-options">
                 <h2 class="form-title">Export Observations</h2>
                 
@@ -912,6 +1003,248 @@
             }
         },
 
+        // Clear all observations
+        clearObservations() {
+            if (this.observations.length === 0) {
+                this.showStatus('Logbook is already empty', 'info', 'logbook');
+                return;
+            }
+
+            if (confirm('Are you sure you want to clear ALL observations? This cannot be undone.')) {
+                this.observations = [];
+                localStorage.removeItem('ecolens_observations');
+                this.renderLogbook();
+                this.showStatus('All observations cleared successfully', 'success', 'logbook');
+            }
+        },
+
+        // Import observations from CSV with proper merging
+        importObservations(csvContent, mode = 'append') {
+            try {
+                const lines = csvContent.split('\n');
+                if (lines.length < 2) {
+                    throw new Error('CSV file is empty or invalid');
+                }
+
+                // Parse headers
+                const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                // Check if headers match expected format
+                const expectedHeaders = [
+                    'ID', 'Timestamp', 'Observer Name', 'Scientific Name', 'Common Name', 'Location',
+                    'Latitude', 'Longitude', 'Habitat', 'Observation Type',
+                    'Characteristics', 'Equipment', 'References', 'Notes', 'Has Photo'
+                ];
+
+                if (!expectedHeaders.every(h => headers.includes(h))) {
+                    throw new Error('CSV headers do not match expected format. Please use a file exported from EcoLens.');
+                }
+
+                const importedObservations = [];
+                let successCount = 0;
+                let errorCount = 0;
+                let updateCount = 0;
+
+                // Parse data rows
+                for (let i = 1; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    try {
+                        // Parse CSV line with quoted fields
+                        const row = this.parseCSVLine(line);
+                        
+                        // Map CSV row to observation object
+                        const observation = {
+                            id: row[0] || this.generateObservationId(),
+                            timestamp: this.parseCSVTimestamp(row[1]) || new Date().toISOString(),
+                            observerName: row[2] || '',
+                            scientificName: row[3] || '',
+                            commonName: row[4] || '',
+                            location: {
+                                text: row[5] || '',
+                                coordinates: (row[6] && row[7] && !isNaN(row[6]) && !isNaN(row[7])) ? {
+                                    lat: parseFloat(row[6]),
+                                    lng: parseFloat(row[7])
+                                } : null,
+                                accuracy: null
+                            },
+                            habitat: row[8] || '',
+                            observationType: row[9] || 'direct',
+                            characteristics: row[10] || '',
+                            equipment: row[11] ? row[11].split(';').map(e => e.trim()).filter(e => e) : [],
+                            references: row[12] || '',
+                            notes: row[13] || '',
+                            photo: null, // Photos cannot be imported from CSV
+                            metadata: {
+                                deviceInfo: 'Imported from CSV',
+                                appVersion: '1.0',
+                                lastModified: new Date().toISOString()
+                            }
+                        };
+
+                        // Validate required fields
+                        if (!observation.scientificName || !observation.observerName || !observation.habitat) {
+                            console.warn(`Skipping row ${i}: Missing required fields`);
+                            errorCount++;
+                            continue;
+                        }
+
+                        importedObservations.push(observation);
+                        successCount++;
+                    } catch (error) {
+                        console.error(`Error parsing row ${i}:`, error);
+                        errorCount++;
+                    }
+                }
+
+                if (importedObservations.length === 0) {
+                    throw new Error('No valid observations found in CSV file');
+                }
+
+                // Handle import based on mode
+                const existingIds = new Set(this.observations.map(obs => obs.id));
+                
+                switch (mode) {
+                    case 'replace':
+                        // Completely replace existing data
+                        this.observations = importedObservations;
+                        break;
+                        
+                    case 'merge':
+                        // Merge and update existing observations
+                        const observationMap = new Map();
+                        
+                        // Add all existing observations to map
+                        this.observations.forEach(obs => {
+                            observationMap.set(obs.id, obs);
+                        });
+                        
+                        // Merge imported observations
+                        importedObservations.forEach(importedObs => {
+                            if (observationMap.has(importedObs.id)) {
+                                // Update existing observation
+                                const existingObs = observationMap.get(importedObs.id);
+                                observationMap.set(importedObs.id, {
+                                    ...existingObs,
+                                    ...importedObs,
+                                    metadata: {
+                                        ...existingObs.metadata,
+                                        lastModified: new Date().toISOString(),
+                                        source: 'merged from CSV'
+                                    }
+                                });
+                                updateCount++;
+                            } else {
+                                // Add new observation
+                                observationMap.set(importedObs.id, importedObs);
+                            }
+                        });
+                        
+                        this.observations = Array.from(observationMap.values());
+                        break;
+                        
+                    case 'append':
+                    default:
+                        // Append, avoiding duplicates by ID
+                        const uniqueImports = importedObservations.filter(obs => !existingIds.has(obs.id));
+                        this.observations = [...this.observations, ...uniqueImports];
+                        break;
+                }
+
+                // Sort by timestamp (newest first)
+                this.observations.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                // Save to localStorage
+                localStorage.setItem('ecolens_observations', JSON.stringify(this.observations));
+                this.renderLogbook();
+
+                return {
+                    success: true,
+                    imported: successCount,
+                    updated: updateCount,
+                    errors: errorCount,
+                    total: this.observations.length,
+                    mode: mode
+                };
+
+            } catch (error) {
+                console.error('Import error:', error);
+                throw error;
+            }
+        },
+
+        // Parse CSV line with quoted fields
+        parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                const nextChar = line[i + 1];
+                
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        // Escaped quote
+                        current += '"';
+                        i++; // Skip next quote
+                    } else {
+                        // Start or end of quoted field
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    // End of field
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            // Add last field
+            result.push(current);
+            
+            // Remove quotes from fields
+            return result.map(field => field.replace(/^"(.*)"$/, '$1').trim());
+        },
+
+        // Parse timestamp from CSV
+        parseCSVTimestamp(timestampStr) {
+            if (!timestampStr) return null;
+            
+            // Try different date formats
+            const formats = [
+                // ISO format
+                () => {
+                    const date = new Date(timestampStr);
+                    return !isNaN(date.getTime()) ? date.toISOString() : null;
+                },
+                // Locale format with comma (e.g., "12/25/2023, 2:30:00 PM")
+                () => {
+                    const cleaned = timestampStr.replace(',', '');
+                    const date = new Date(cleaned);
+                    return !isNaN(date.getTime()) ? date.toISOString() : null;
+                },
+                // Try parsing as mm/dd/yyyy hh:mm:ss
+                () => {
+                    const parts = timestampStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2}):(\d{2})/);
+                    if (parts) {
+                        const date = new Date(parts[3], parts[1] - 1, parts[2], parts[4], parts[5], parts[6]);
+                        return !isNaN(date.getTime()) ? date.toISOString() : null;
+                    }
+                    return null;
+                }
+            ];
+            
+            for (const format of formats) {
+                const result = format();
+                if (result) return result;
+            }
+            
+            return new Date().toISOString(); // Fallback to current date
+        },
+
         // Get filtered observations for export
         getFilteredObservations(startDate = null, endDate = null) {
             if (!startDate && !endDate) {
@@ -980,6 +1313,24 @@
                 this.handleExport();
             });
 
+            // Import handling
+            document.getElementById('process-import').addEventListener('click', () => {
+                this.handleImport();
+            });
+
+            // Clear logbook
+            document.getElementById('clear-logbook').addEventListener('click', () => {
+                this.clearObservations();
+            });
+
+            // Import logbook button in logbook panel
+            document.getElementById('import-logbook').addEventListener('click', () => {
+                this.switchTab('export');
+                setTimeout(() => {
+                    document.getElementById('csv-import').click();
+                }, 100);
+            });
+
             // Form inputs - clear status on change
             document.querySelectorAll('#record-panel input, #record-panel textarea, #record-panel select')
                 .forEach(input => {
@@ -987,6 +1338,70 @@
                         document.getElementById('record-status').style.display = 'none';
                     });
                 });
+        },
+
+        // Handle CSV import
+        handleImport() {
+            const fileInput = document.getElementById('csv-import');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                this.showStatus('Please select a CSV file to import', 'error', 'export');
+                return;
+            }
+
+            const mode = document.getElementById('import-mode').value;
+            
+            if (mode === 'replace' && this.observations.length > 0) {
+                if (!confirm('WARNING: This will replace ALL existing observations with the imported data. Are you sure?')) {
+                    return;
+                }
+            }
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const importBtn = document.getElementById('process-import');
+                    const originalText = importBtn.textContent;
+                    importBtn.innerHTML = '<span class="loading"></span> Processing...';
+                    importBtn.disabled = true;
+
+                    const result = this.importObservations(e.target.result, mode);
+                    
+                    importBtn.textContent = originalText;
+                    importBtn.disabled = false;
+                    fileInput.value = '';
+
+                    let message = `Import successful! ${result.imported} observations imported. `;
+                    if (result.mode === 'merge') {
+                        message += `${result.updated} observations updated. `;
+                    }
+                    message += `Total observations: ${result.total}`;
+                    
+                    if (result.errors > 0) {
+                        message += ` (${result.errors} rows had errors)`;
+                    }
+
+                    this.showStatus(message, 'success', 'export');
+
+                    // Switch to logbook tab to see imported data
+                    setTimeout(() => this.switchTab('logbook'), 1500);
+
+                } catch (error) {
+                    document.getElementById('process-import').textContent = '📥 Process Import';
+                    document.getElementById('process-import').disabled = false;
+                    this.showStatus(`Import failed: ${error.message}`, 'error', 'export');
+                    console.error('Import error:', error);
+                }
+            };
+
+            reader.onerror = () => {
+                document.getElementById('process-import').textContent = '📥 Process Import';
+                document.getElementById('process-import').disabled = false;
+                this.showStatus('Error reading file', 'error', 'export');
+            };
+
+            reader.readAsText(file, 'UTF-8');
         },
 
         // Switch between tabs
@@ -1005,6 +1420,11 @@
             if (tabName !== 'export') {
                 document.getElementById('export-download').style.display = 'none';
                 document.getElementById('pdf-progress').style.display = 'none';
+            }
+            
+            // Refresh logbook when switching to it
+            if (tabName === 'logbook') {
+                this.renderLogbook();
             }
         },
 
@@ -1637,16 +2057,16 @@
             ];
             
             const rows = observations.map(obs => [
-                obs.id,
-                new Date(obs.timestamp).toLocaleString(),
+                `"${obs.id}"`,
+                `"${new Date(obs.timestamp).toLocaleString()}"`,
                 `"${obs.observerName.replace(/"/g, '""')}"`,
                 `"${obs.scientificName.replace(/"/g, '""')}"`,
                 `"${obs.commonName.replace(/"/g, '""')}"`,
                 `"${obs.location.text.replace(/"/g, '""')}"`,
                 obs.location.coordinates?.lat || '',
                 obs.location.coordinates?.lng || '',
-                obs.habitat,
-                obs.observationType,
+                `"${obs.habitat}"`,
+                `"${obs.observationType}"`,
                 `"${(obs.characteristics || '').replace(/"/g, '""')}"`,
                 `"${(obs.equipment || []).join('; ').replace(/"/g, '""')}"`,
                 `"${(obs.references || '').replace(/"/g, '""')}"`,
@@ -1666,7 +2086,7 @@
             this.showStatus(`Exported ${observations.length} observations to CSV`, 'success', 'export');
         },
 
-        // Export to PDF - FIXED VERSION with proper spacing
+        // Export to PDF - FIXED to include ALL data
         exportToPDF(observations) {
             if (this.isGeneratingPDF) {
                 this.showStatus('PDF generation already in progress', 'warning', 'export');
@@ -2329,6 +2749,10 @@
         // Show status message
         showStatus(message, type = 'info', panel = 'record') {
             const statusEl = document.getElementById(`${panel}-status`);
+            if (!statusEl) {
+                console.error(`Status element not found for panel: ${panel}`);
+                return;
+            }
             statusEl.textContent = message;
             statusEl.className = `status-message status-${type}`;
             statusEl.style.display = 'block';
